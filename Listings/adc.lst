@@ -1,0 +1,132 @@
+C251 COMPILER V5.60.0,  adc                                                                06/03/26  20:20:58  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE adc
+OBJECT MODULE PLACED IN .\Objects\adc.obj
+COMPILER INVOKED BY: D:\mcu\Keil5\Keil_v5\C251\BIN\C251.EXE Sources\adc.c XSMALL BROWSE INCDIR(.\Sources\inc) DEBUG PRIN
+                    -T(.\Listings\adc.lst) TABS(2) OBJECT(.\Objects\adc.obj) 
+
+stmt  level    source
+
+    1          //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
+    2          ////////////////////////////////////////
+    3          // 在此添加用户文件头说明信息  
+    4          // 文件名称: adc.c
+    5          // 文件描述: 
+    6          // 文件版本: V1.0
+    7          // 修改记录:
+    8          //   1. (2026-03-06) 创建文件
+    9          ////////////////////////////////////////
+   10          //<<AICUBE_USER_HEADER_REMARK_END>>
+   11          
+   12          
+   13          #include "config.h"
+   14          
+   15          
+   16          //<<AICUBE_USER_INCLUDE_BEGIN>>
+   17          // 在此添加用户头文件包含  
+   18          //<<AICUBE_USER_INCLUDE_END>>
+   19          
+   20          
+   21          //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
+   22          // 在此添加用户全局变量定义、用户宏定义以及函数声明  
+   23          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
+   24          
+   25          
+   26          BOOL fADCConverted;                     //ADC转换完成标志
+   27          
+   28          ////////////////////////////////////////
+   29          // ADC初始化函数
+   30          // 入口参数: 无
+   31          // 函数返回: 无
+   32          ////////////////////////////////////////
+   33          void ADC_Init(void)
+   34          {
+   35   1          ADC_SetClockDivider(0);             //设置ADC时钟
+   36   1          ADC_ResultRightAlign();             //设置ADC结果右对齐(12位结果)
+   37   1          ADC_EnablePWMTrig();                //使能PWM同步触发ADC
+   38   1          ADC_DisableRepeatConv();            //关闭ADC自动重复转换功能
+   39   1      
+   40   1          ADC_SetCSSetupCycles(0);            //设置ADC通道选择建立时间
+   41   1          ADC_SetCSHoldCycles(1);             //设置ADC通道选择保持时间
+   42   1          ADC_SetSampleDutyCycles(9);         //设置ADC通道采样时间
+   43   1      
+   44   1          ADC_DisableETR();                   //禁止ADC外部触发功能
+   45   1      
+   46   1          ADC_SetIntPriority(0);              //设置中断为最低优先级
+   47   1          ADC_EnableInt();                    //使能ADC中断
+   48   1          fADCConverted = 0;                  //初始化转换结束标志
+   49   1      
+   50   1          ADC_ActiveChannel(1);               //选择ADC通道
+   51   1          ADC_Enable();                       //使能ADC功能
+   52   1      
+   53   1          //<<AICUBE_USER_ADC_INITIAL_BEGIN>>
+   54   1          // 在此添加用户初始化代码  
+   55   1          //<<AICUBE_USER_ADC_INITIAL_END>>
+   56   1      }
+   57          
+   58          ////////////////////////////////////////
+C251 COMPILER V5.60.0,  adc                                                                06/03/26  20:20:58  PAGE 2   
+
+   59          // 获取ADC转换结果函数
+   60          // 入口参数: ch (ADC通道选择)
+   61          // 函数返回: ADC转换结果
+   62          ////////////////////////////////////////
+   63          uint16_t ADC_Convert(uint8_t ch)
+   64          {
+   65   1          uint16_t res;                       //定义保存ADC结果的变量
+   66   1      
+   67   1          ADC_ActiveChannel(ch);              //选择ADC通道
+   68   1          ADC_Start();                        //开始ADC转换
+   69   1          while (!fADCConverted);             //等待ADC转换完成
+   70   1          fADCConverted = 0;                  //清除ADC转换结束标志
+   71   1          res = ADC_ReadResult();             //读取ADC转换结果
+   72   1      
+   73   1          return res;                         //返回ADC结果
+   74   1      }
+   75          
+   76          
+   77          ////////////////////////////////////////
+   78          // ADC中断服务程序
+   79          // 入口参数: 无
+   80          // 函数返回: 无
+   81          ////////////////////////////////////////
+   82          void ADC_ISR(void) interrupt ADC_VECTOR
+   83          {
+   84   1          //<<AICUBE_USER_ADC_ISR_CODE1_BEGIN>>
+   85   1          // 在此添加中断函数用户代码  
+   86   1          ADC_ClearFlag();                    //清除ADC转换完成中断标志
+   87   1          fADCConverted = 1;                  //设置转换结束标志
+   88   1          //<<AICUBE_USER_ADC_ISR_CODE1_END>>
+   89   1      }
+   90          
+   91          
+   92          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+   93          // 在此添加用户函数实现代码  
+   94          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+   95          
+   96          
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       135     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =         1     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

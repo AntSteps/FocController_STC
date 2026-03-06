@@ -1,0 +1,190 @@
+C251 COMPILER V5.60.0,  port                                                               06/03/26  20:20:57  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE port
+OBJECT MODULE PLACED IN .\Objects\port.obj
+COMPILER INVOKED BY: D:\mcu\Keil5\Keil_v5\C251\BIN\C251.EXE Sources\port.c XSMALL BROWSE INCDIR(.\Sources\inc) DEBUG PRI
+                    -NT(.\Listings\port.lst) TABS(2) OBJECT(.\Objects\port.obj) 
+
+stmt  level    source
+
+    1          //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
+    2          ////////////////////////////////////////
+    3          // 在此添加用户文件头说明信息  
+    4          // 文件名称: port.c
+    5          // 文件描述: 
+    6          // 文件版本: V1.0
+    7          // 修改记录:
+    8          //   1. (2026-03-06) 创建文件
+    9          ////////////////////////////////////////
+   10          //<<AICUBE_USER_HEADER_REMARK_END>>
+   11          
+   12          
+   13          #include "config.h"
+   14          
+   15          
+   16          //<<AICUBE_USER_INCLUDE_BEGIN>>
+   17          // 在此添加用户头文件包含  
+   18          //<<AICUBE_USER_INCLUDE_END>>
+   19          
+   20          
+   21          //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
+   22          // 在此添加用户全局变量定义、用户宏定义以及函数声明  
+   23          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
+   24          
+   25          
+   26          
+   27          ////////////////////////////////////////
+   28          // P0口初始化函数
+   29          // 入口参数: 无
+   30          // 函数返回: 无
+   31          ////////////////////////////////////////
+   32          void PORT0_Init(void)
+   33          {
+   34   1          SetP0nInitLevelHigh(PIN_ALL);       //设置P0初始化电平
+   35   1          SetP0nQuasiMode(PIN_7 | PIN_3 | PIN_2 | PIN_1 | PIN_0); //设置P0.7,P0.3,P0.2,P0.1,P0.0为准双向�
+             -��模式
+   36   1          SetP0nHighZInputMode(PIN_6 | PIN_5 | PIN_4); //设置P0.6,P0.5,P0.4为高阻输入模式
+   37   1      
+   38   1          DisableP0nPullUp(PIN_ALL);          //关闭P0内部上拉电阻
+   39   1          DisableP0nPullDown(PIN_ALL);        //关闭P0内部下拉电阻
+   40   1          DisableP0nSchmitt(PIN_ALL);         //使能P0施密特触发
+   41   1          SetP0nSlewRateNormal(PIN_ALL);      //设置P0一般翻转速度
+   42   1          SetP0nDrivingNormal(PIN_ALL);       //设置P0一般驱动能力
+   43   1          SetP0nDigitalInput(PIN_ALL);        //使能P0数字信号输入功能
+   44   1      
+   45   1          //<<AICUBE_USER_PORT0_INITIAL_BEGIN>>
+   46   1          // 在此添加用户初始化代码  
+   47   1          //<<AICUBE_USER_PORT0_INITIAL_END>>
+   48   1      }
+   49          
+   50          ////////////////////////////////////////
+   51          // P1口初始化函数
+   52          // 入口参数: 无
+   53          // 函数返回: 无
+   54          ////////////////////////////////////////
+   55          void PORT1_Init(void)
+   56          {
+   57   1          SetP1nInitLevelHigh(PIN_ALL);       //设置P1初始化电平
+C251 COMPILER V5.60.0,  port                                                               06/03/26  20:20:57  PAGE 2   
+
+   58   1          SetP1nQuasiMode(PIN_7 | PIN_6 | PIN_4 | PIN_3 | PIN_2 | PIN_0); //设置P1.7,P1.6,P1.4,P1.3,P1.2,P1.0
+             -为准双向口模式
+   59   1          SetP1nPushPullMode(PIN_5);          //设置P1.5为推挽输出模式
+   60   1          SetP1nHighZInputMode(PIN_1);        //设置P1.1为高阻输入模式
+   61   1      
+   62   1          DisableP1nPullUp(PIN_ALL);          //关闭P1内部上拉电阻
+   63   1          DisableP1nPullDown(PIN_ALL);        //关闭P1内部下拉电阻
+   64   1          DisableP1nSchmitt(PIN_ALL);         //使能P1施密特触发
+   65   1          SetP1nSlewRateNormal(PIN_ALL);      //设置P1一般翻转速度
+   66   1          SetP1nDrivingNormal(PIN_ALL);       //设置P1一般驱动能力
+   67   1          SetP1nDigitalInput(PIN_ALL);        //使能P1数字信号输入功能
+   68   1      
+   69   1          //<<AICUBE_USER_PORT1_INITIAL_BEGIN>>
+   70   1          // 在此添加用户初始化代码  
+   71   1          //<<AICUBE_USER_PORT1_INITIAL_END>>
+   72   1      }
+   73          
+   74          ////////////////////////////////////////
+   75          // P2口初始化函数
+   76          // 入口参数: 无
+   77          // 函数返回: 无
+   78          ////////////////////////////////////////
+   79          void PORT2_Init(void)
+   80          {
+   81   1          SetP2nInitLevelHigh(PIN_ALL);       //设置P2初始化电平
+   82   1          SetP2nQuasiMode(PIN_7 | PIN_6 | PIN_4 | PIN_3 | PIN_2 | PIN_1 | PIN_0); //设置P2.7,P2.6,P2.4,P2.3,P
+             -2.2,P2.1,P2.0为准双向口模式
+   83   1          SetP2nPushPullMode(PIN_5);          //设置P2.5为推挽输出模式
+   84   1      
+   85   1          DisableP2nPullUp(PIN_ALL);          //关闭P2内部上拉电阻
+   86   1          DisableP2nPullDown(PIN_ALL);        //关闭P2内部下拉电阻
+   87   1          DisableP2nSchmitt(PIN_ALL);         //使能P2施密特触发
+   88   1          SetP2nSlewRateNormal(PIN_ALL);      //设置P2一般翻转速度
+   89   1          SetP2nDrivingNormal(PIN_ALL);       //设置P2一般驱动能力
+   90   1          SetP2nDigitalInput(PIN_ALL);        //使能P2数字信号输入功能
+   91   1      
+   92   1          //<<AICUBE_USER_PORT2_INITIAL_BEGIN>>
+   93   1          // 在此添加用户初始化代码  
+   94   1          //<<AICUBE_USER_PORT2_INITIAL_END>>
+   95   1      }
+   96          
+   97          ////////////////////////////////////////
+   98          // P3口初始化函数
+   99          // 入口参数: 无
+  100          // 函数返回: 无
+  101          ////////////////////////////////////////
+  102          void PORT3_Init(void)
+  103          {
+  104   1          SetP3nInitLevelHigh(PIN_ALL);       //设置P3初始化电平
+  105   1          SetP3nQuasiMode(PIN_ALL);           //设置P3为准双向口模式
+  106   1      
+  107   1          DisableP3nPullUp(PIN_ALL);          //关闭P3内部上拉电阻
+  108   1          DisableP3nPullDown(PIN_ALL);        //关闭P3内部下拉电阻
+  109   1          DisableP3nSchmitt(PIN_ALL);         //使能P3施密特触发
+  110   1          SetP3nSlewRateNormal(PIN_ALL);      //设置P3一般翻转速度
+  111   1          SetP3nDrivingNormal(PIN_ALL);       //设置P3一般驱动能力
+  112   1          SetP3nDigitalInput(PIN_ALL);        //使能P3数字信号输入功能
+  113   1      
+  114   1          //<<AICUBE_USER_PORT3_INITIAL_BEGIN>>
+  115   1          // 在此添加用户初始化代码  
+  116   1          //<<AICUBE_USER_PORT3_INITIAL_END>>
+  117   1      }
+  118          
+  119          ////////////////////////////////////////
+  120          // P5口初始化函数
+  121          // 入口参数: 无
+C251 COMPILER V5.60.0,  port                                                               06/03/26  20:20:57  PAGE 3   
+
+  122          // 函数返回: 无
+  123          ////////////////////////////////////////
+  124          void PORT5_Init(void)
+  125          {
+  126   1          SetP5nInitLevelHigh(PIN_ALL);       //设置P5初始化电平
+  127   1          SetP5nQuasiMode(PIN_7 | PIN_6 | PIN_5 | PIN_4 | PIN_1 | PIN_0); //设置P5.7,P5.6,P5.5,P5.4,P5.1,P5.0
+             -为准双向口模式
+  128   1          SetP5nPushPullMode(PIN_3 | PIN_2);  //设置P5.3,P5.2为推挽输出模式
+  129   1      
+  130   1          DisableP5nPullUp(PIN_ALL);          //关闭P5内部上拉电阻
+  131   1          DisableP5nPullDown(PIN_ALL);        //关闭P5内部下拉电阻
+  132   1          DisableP5nSchmitt(PIN_ALL);         //使能P5施密特触发
+  133   1          SetP5nSlewRateNormal(PIN_ALL);      //设置P5一般翻转速度
+  134   1          SetP5nDrivingNormal(PIN_ALL);       //设置P5一般驱动能力
+  135   1          SetP5nDigitalInput(PIN_ALL);        //使能P5数字信号输入功能
+  136   1      
+  137   1          //<<AICUBE_USER_PORT5_INITIAL_BEGIN>>
+  138   1          // 在此添加用户初始化代码  
+  139   1          //<<AICUBE_USER_PORT5_INITIAL_END>>
+  140   1      }
+  141          
+  142          
+  143          
+  144          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+  145          // 在此添加用户函数实现代码  
+  146          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+  147          
+  148          
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       325     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

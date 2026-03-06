@@ -1,0 +1,94 @@
+C251 COMPILER V5.60.0,  timer                                                              06/03/26  20:20:58  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE timer
+OBJECT MODULE PLACED IN .\Objects\timer.obj
+COMPILER INVOKED BY: D:\mcu\Keil5\Keil_v5\C251\BIN\C251.EXE Sources\timer.c XSMALL BROWSE INCDIR(.\Sources\inc) DEBUG PR
+                    -INT(.\Listings\timer.lst) TABS(2) OBJECT(.\Objects\timer.obj) 
+
+stmt  level    source
+
+    1          //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
+    2          ////////////////////////////////////////
+    3          // 在此添加用户文件头说明信息  
+    4          // 文件名称: timer.c
+    5          // 文件描述: 
+    6          // 文件版本: V1.0
+    7          // 修改记录:
+    8          //   1. (2026-03-06) 创建文件
+    9          ////////////////////////////////////////
+   10          //<<AICUBE_USER_HEADER_REMARK_END>>
+   11          
+   12          
+   13          #include "config.h"
+   14          
+   15          
+   16          //<<AICUBE_USER_INCLUDE_BEGIN>>
+   17          // 在此添加用户头文件包含  
+   18          //<<AICUBE_USER_INCLUDE_END>>
+   19          
+   20          
+   21          //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
+   22          // 在此添加用户全局变量定义、用户宏定义以及函数声明  
+   23          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
+   24          
+   25          
+   26          
+   27          ////////////////////////////////////////
+   28          // 定时器3初始化函数
+   29          // 入口参数: 无
+   30          // 函数返回: 无
+   31          ////////////////////////////////////////
+   32          void TIMER3_Init(void)
+   33          {
+   34   1      #define T3_PSCR                 (0)
+   35   1      #ifdef BAUDRATE
+               #undef BAUDRATE
+               #endif
+   38   1      #define BAUDRATE                (115200)
+   39   1      #define T3_RELOAD               (65536 - (SYSCLK / BAUDRATE + 2) / 4)
+   40   1      
+   41   1          TIMER3_TimerMode();                 //设置定时器3为定时模式
+   42   1          TIMER3_1TMode();                    //设置定时器3为1T模式
+   43   1          TIMER3_SetPrescale(T3_PSCR);        //设置定时器3的8位预分频
+   44   1          TIMER3_SetReload16(T3_RELOAD);      //设置定时器3的16位重载值
+   45   1          TIMER3_Run();                       //定时器3开始运行
+   46   1      
+   47   1          //<<AICUBE_USER_TIMER3_INITIAL_BEGIN>>
+   48   1          // 在此添加用户初始化代码  
+   49   1          //<<AICUBE_USER_TIMER3_INITIAL_END>>
+   50   1      }
+   51          
+   52          
+   53          
+   54          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+   55          // 在此添加用户函数实现代码  
+   56          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+   57          
+   58          
+C251 COMPILER V5.60.0,  timer                                                              06/03/26  20:20:58  PAGE 2   
+
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =        28     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

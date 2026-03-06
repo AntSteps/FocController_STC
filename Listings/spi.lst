@@ -1,0 +1,143 @@
+C251 COMPILER V5.60.0,  spi                                                                06/03/26  20:20:58  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE spi
+OBJECT MODULE PLACED IN .\Objects\spi.obj
+COMPILER INVOKED BY: D:\mcu\Keil5\Keil_v5\C251\BIN\C251.EXE Sources\spi.c XSMALL BROWSE INCDIR(.\Sources\inc) DEBUG PRIN
+                    -T(.\Listings\spi.lst) TABS(2) OBJECT(.\Objects\spi.obj) 
+
+stmt  level    source
+
+    1          //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
+    2          ////////////////////////////////////////
+    3          // 在此添加用户文件头说明信息  
+    4          // 文件名称: spi.c
+    5          // 文件描述: 
+    6          // 文件版本: V1.0
+    7          // 修改记录:
+    8          //   1. (2026-03-06) 创建文件
+    9          ////////////////////////////////////////
+   10          //<<AICUBE_USER_HEADER_REMARK_END>>
+   11          
+   12          
+   13          #include "config.h"
+   14          
+   15          
+   16          //<<AICUBE_USER_INCLUDE_BEGIN>>
+   17          // 在此添加用户头文件包含  
+   18          //<<AICUBE_USER_INCLUDE_END>>
+   19          
+   20          
+   21          //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
+   22          // 在此添加用户全局变量定义、用户宏定义以及函数声明  
+   23          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
+   24          
+   25          
+   26          BOOL fSPITransBusy;                     //SPI读写忙标志
+   27          
+   28          ////////////////////////////////////////
+   29          // SPI初始化函数
+   30          // 入口参数: 无
+   31          // 函数返回: 无
+   32          ////////////////////////////////////////
+   33          void SPI_Init(void)
+   34          {
+   35   1          SPI_SwitchP3n();                    //选择SPI数据口: SS(P3.5), MOSI(P3.4), MISO(P3.3), SCLK(P3.2
+             -)
+   36   1      
+   37   1          SPI_MasterMode();                   //设置SPI为主机模式
+   38   1          SPI_IgnoreSS();                     //忽略SS脚
+   39   1          SPI_DataMSB();                      //设置SPI数据顺序为MSB (高位在前)
+   40   1          SPI_SetMode0();                     //设置SPI工作模式0 (CPOL=0, CPHA=0)
+   41   1          SPI_SetClockDivider4();             //设置SPI时钟分频
+   42   1      
+   43   1          HSSPI_Disable();                    //关闭SPI高速模式
+   44   1      
+   45   1          SPI_SetIntPriority(0);              //设置中断为最低优先级
+   46   1          SPI_EnableInt();                    //使能SPI中断
+   47   1          fSPITransBusy = 0;                  //清除SPI忙标志位
+   48   1      
+   49   1          SPI_Enable();                       //使能SPI功能
+   50   1      
+   51   1          //<<AICUBE_USER_SPI_INITIAL_BEGIN>>
+   52   1          // 在此添加用户初始化代码  
+   53   1          //<<AICUBE_USER_SPI_INITIAL_END>>
+   54   1      }
+   55          
+   56          ////////////////////////////////////////
+   57          // SPI主机模式发送字节函数
+C251 COMPILER V5.60.0,  spi                                                                06/03/26  20:20:58  PAGE 2   
+
+   58          // 入口参数: dat (待发送的字节数据)
+   59          // 函数返回: 无
+   60          ////////////////////////////////////////
+   61          void SPI_WriteByte(uint8_t dat)
+   62          {
+   63   1          fSPITransBusy = 1;                  //设置发送忙标志
+   64   1          SPI_SendData(dat);                  //触发主机发送数据
+   65   1          while (fSPITransBusy);              //等待发送完成
+   66   1      }
+   67          
+   68          ////////////////////////////////////////
+   69          // SPI主机模式读取字节函数
+   70          // 入口参数: 无
+   71          // 函数返回: 读取的字节数据
+   72          ////////////////////////////////////////
+   73          uint8_t SPI_ReadByte(void)
+   74          {
+   75   1          fSPITransBusy = 1;                  //设置读取忙标志
+   76   1          SPI_SendData(0xff);                 //触发主机读取数据（主机发送时钟信号）
+   77   1          while (fSPITransBusy);              //等待读取完成
+   78   1          return SPI_ReadData();
+   79   1      }
+   80          
+   81          
+   82          ////////////////////////////////////////
+   83          // SPI中断服务程序
+   84          // 入口参数: 无
+   85          // 函数返回: 无
+   86          ////////////////////////////////////////
+   87          void SPI_ISR(void) interrupt SPI_VECTOR
+   88          {
+   89   1          //<<AICUBE_USER_SPI_ISR_CODE1_BEGIN>>
+   90   1          // 在此添加中断函数用户代码  
+   91   1          if (SPI_CheckFlag())                //判断SPI中断
+   92   1          {
+   93   2              SPI_ClearFlag();                //清除SPI中断标志
+   94   2              fSPITransBusy = 0;              //清除SPI忙标志位
+   95   2          }
+   96   1          //<<AICUBE_USER_SPI_ISR_CODE1_END>>
+   97   1      }
+   98          
+   99          
+  100          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+  101          // 在此添加用户函数实现代码  
+  102          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+  103          
+  104          
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =        92     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =         1     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+C251 COMPILER V5.60.0,  spi                                                                06/03/26  20:20:58  PAGE 3   
+
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
