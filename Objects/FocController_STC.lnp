@@ -8,7 +8,9 @@
 ".\Objects\pwm.obj",
 ".\Objects\mathlib.obj",
 ".\Sources\lib\ai8051u_32_mdu32.lib",
-".\Sources\lib\ai8051u_32_tfpu.lib" 
+".\Sources\lib\ai8051u_32_tfpu.lib",
+".\Objects\crc8.obj",
+".\Objects\uart_controller.obj" 
 TO ".\Objects\FocController_STC" 
 PRINT(".\Listings\FocController_STC.map") CASE DISABLEWARNING (16) 
 REMOVEUNUSED, NOOVERLAY 

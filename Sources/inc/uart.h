@@ -11,18 +11,19 @@
 
 
 //<<AICUBE_USER_DEFINE_BEGIN>>
-// 在此添加用户宏定义  
+void UART_DMA_Send(uint8_t *pData, uint8_t len);
+void UART_DMA_Receive(uint8_t *pData, uint8_t len);
 //<<AICUBE_USER_DEFINE_END>>
 
 
 void UART3_Init(void);
 
-extern uint8_t xdata pu8UR3DMATxBuffer[21];
-extern uint8_t xdata pu8UR3DMARxBuffer[17];
+extern uint8_t xdata pu8UR3DMATxBuffer[22];
+extern uint8_t xdata pu8UR3DMARxBuffer[18];
 
 
 //<<AICUBE_USER_EXTERNAL_DECLARE_BEGIN>>
-// 在此添加用户外部函数和外部变量声明  
+extern uint8_t rxd_buf[18 * 2];    //串口接收缓冲区数组
 //<<AICUBE_USER_EXTERNAL_DECLARE_END>>
 
 

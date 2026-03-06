@@ -788,13 +788,13 @@
 		<IntPriority>0</IntPriority>
 		<EnableTxDMA>1</EnableTxDMA>
 		<EnableTxDMAInt>1</EnableTxDMAInt>
-		<TxDMAAmount>21</TxDMAAmount>
+		<TxDMAAmount>22</TxDMAAmount>
 		<TxDMAInterval>0</TxDMAInterval>
 		<TxDMAIntPriority>0</TxDMAIntPriority>
 		<TxDMABusPriority>0</TxDMABusPriority>
 		<EnableRxDMA>1</EnableRxDMA>
 		<EnableRxDMAInt>1</EnableRxDMAInt>
-		<RxDMAAmount>17</RxDMAAmount>
+		<RxDMAAmount>18</RxDMAAmount>
 		<RxDMAInterval>0</RxDMAInterval>
 		<RxDMAIntPriority>0</RxDMAIntPriority>
 		<RxDMABusPriority>0</RxDMABusPriority>

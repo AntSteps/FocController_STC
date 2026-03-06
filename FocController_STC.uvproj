@@ -383,6 +383,18 @@
         </Group>
         <Group>
           <GroupName>User Sources</GroupName>
+          <Files>
+            <File>
+              <FileName>crc8.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\crc8.c</FilePath>
+            </File>
+            <File>
+              <FileName>uart_controller.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\uart_controller.c</FilePath>
+            </File>
+          </Files>
         </Group>
       </Groups>
     </Target>

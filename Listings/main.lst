@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  main                                                               06/03/26  20:20:57  PAGE 1   
+C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE main
@@ -66,7 +66,7 @@ stmt  level    source
    56          // 函数返回: 无
    57          ////////////////////////////////////////
    58          void SYS_Init(void)
-C251 COMPILER V5.60.0,  main                                                               06/03/26  20:20:57  PAGE 2   
+C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 2   
 
    59          {
    60   1          EnableAccessXFR();                  //使能访问扩展XFR
@@ -134,7 +134,7 @@ stmt  level    source
   122          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
   123          
   124          
-C251 COMPILER V5.60.0,  main                                                               06/03/26  20:20:57  PAGE 3   
+C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 3   
 
 
 

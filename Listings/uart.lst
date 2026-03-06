@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  uart                                                               06/03/26  20:20:58  PAGE 1   
+C251 COMPILER V5.60.0,  uart                                                               06/03/26  21:24:31  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE uart
@@ -29,126 +29,150 @@ stmt  level    source
    19          
    20          
    21          //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-   22          // 在此添加用户全局变量定义、用户宏定义以及函数声明  
-   23          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
-   24          
+   22          uint8_t rxd_buf[18 * 2];    //串口接收缓冲区数组
+   23          uint8_t rxd_buf_index = 0;  //串口接收缓冲区索引
+   24          //<<AICUBE_USER_GLOBAL_DEFINE_END>>
    25          
-   26          uint8_t xdata pu8UR3DMATxBuffer[21];    //串口3DMA发送缓冲区数组
-   27          uint8_t xdata pu8UR3DMARxBuffer[17];    //串口3DMA接收缓冲区数组
-   28          
-   29          ////////////////////////////////////////
-   30          // 串口3初始化函数
-   31          // 入口参数: 无
-   32          // 函数返回: 无
-   33          ////////////////////////////////////////
-   34          void UART3_Init(void)
-   35          {
-   36   1          UART3_SwitchP5051();                //设置串口数据端口: RxD3 (P5.0), TxD3 (P5.1)
-   37   1      
-   38   1          UART3_Timer3BRT();                  //选择定时器3作为串口3波特率发生器
-   39   1      
-   40   1          UART3_EnableRx();                   //使能串口3接收数据
-   41   1          UART3_Mode0();                      //设置串口3为模式0 (8位数据可变波特率)
-   42   1      
-   43   1          DMA_UART3_SetTxAmount(20);          //设置串口DMA发送总字节数
-   44   1          DMA_UART3_SetTxAddress(pu8UR3DMATxBuffer); //设置串口DMA发送缓冲区地址
-   45   1          DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟�
+   26          
+   27          uint8_t xdata pu8UR3DMATxBuffer[22];    //串口3DMA发送缓冲区数组
+   28          uint8_t xdata pu8UR3DMARxBuffer[18];    //串口3DMA接收缓冲区数组
+   29          
+   30          ////////////////////////////////////////
+   31          // 串口3初始化函数
+   32          // 入口参数: 无
+   33          // 函数返回: 无
+   34          ////////////////////////////////////////
+   35          void UART3_Init(void)
+   36          {
+   37   1          UART3_SwitchP5051();                //设置串口数据端口: RxD3 (P5.0), TxD3 (P5.1)
+   38   1      
+   39   1          UART3_Timer3BRT();                  //选择定时器3作为串口3波特率发生器
+   40   1      
+   41   1          UART3_EnableRx();                   //使能串口3接收数据
+   42   1          UART3_Mode0();                      //设置串口3为模式0 (8位数据可变波特率)
+   43   1      
+   44   1          DMA_UART3_SetTxAmount(21);          //设置串口DMA发送总字节数
+   45   1          DMA_UART3_SetTxAddress(pu8UR3DMATxBuffer); //设置串口DMA发送缓冲区地址
+   46   1          DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟�
              -�
-   46   1          DMA_UART3_ClearTxFlag();            //清除串口发送DMA中断标志
-   47   1          DMA_UART3_SetTxBusPriority(0);      //设置总线访问为最低优先级
-   48   1          DMA_UART3_SetTxIntPriority(0);      //设置中断为最低优先级
-   49   1          DMA_UART3_EnableTxInt();            //使能串口3DMA发送中断
-   50   1          DMA_UART3_EnableTx();               //使能串口3DMA发送功能
-   51   1      //  DMA_UART3_TriggerTx();              //触发串口3DMA发送
-   52   1      
-   53   1          DMA_UART3_SetRxAmount(16);          //设置串口DMA接收总字节数
-   54   1          DMA_UART3_SetRxAddress(pu8UR3DMARxBuffer); //设置串口DMA接收缓冲区地址
-   55   1          DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟�
+   47   1          DMA_UART3_ClearTxFlag();            //清除串口发送DMA中断标志
+   48   1          DMA_UART3_SetTxBusPriority(0);      //设置总线访问为最低优先级
+   49   1          DMA_UART3_SetTxIntPriority(0);      //设置中断为最低优先级
+   50   1          DMA_UART3_EnableTxInt();            //使能串口3DMA发送中断
+   51   1          DMA_UART3_EnableTx();               //使能串口3DMA发送功能
+   52   1      //  DMA_UART3_TriggerTx();              //触发串口3DMA发送
+   53   1      
+   54   1          DMA_UART3_SetRxAmount(17);          //设置串口DMA接收总字节数
+   55   1          DMA_UART3_SetRxAddress(pu8UR3DMARxBuffer); //设置串口DMA接收缓冲区地址
+   56   1          DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟�
              -�
-   56   1          DMA_UART3_ClearFIFO();              //清空串口DMA接收FIFO缓冲区
-C251 COMPILER V5.60.0,  uart                                                               06/03/26  20:20:58  PAGE 2   
+C251 COMPILER V5.60.0,  uart                                                               06/03/26  21:24:31  PAGE 2   
 
-   57   1          DMA_UART3_ClearRxFlag();            //清除串口接收DMA中断标志
-   58   1          DMA_UART3_SetRxBusPriority(0);      //设置总线访问为最低优先级
-   59   1          DMA_UART3_SetRxIntPriority(0);      //设置中断为最低优先级
-   60   1          DMA_UART3_EnableRxInt();            //使能串口3DMA接收中断
-   61   1          DMA_UART3_EnableRx();               //使能串口3DMA接收功能
-   62   1      //  DMA_UART3_TriggerRx();              //触发串口3DMA接收
-   63   1      
-   64   1          UART3_SetTxFlag();                  //设置发送标志以配合printf函数
-   65   1      
-   66   1          //<<AICUBE_USER_UART3_INITIAL_BEGIN>>
-   67   1          // 在此添加用户初始化代码  
-   68   1          //<<AICUBE_USER_UART3_INITIAL_END>>
-   69   1      }
-   70          
-   71          ////////////////////////////////////////
-   72          // 重写printf字符发送重定向函数
-   73          // 入口参数: dat (printf函数待打印的字符)
-   74          // 函数返回: 需要返回入口参数的数据
-   75          ////////////////////////////////////////
-   76          char putchar (char dat)                 //将串口3和printf函数绑定
-   77          {
-   78   1          while (!UART3_CheckTxFlag());
-   79   1          UART3_ClearTxFlag();
-   80   1          UART3_SendData(dat);
-   81   1      
-   82   1          return dat;
-   83   1      }
-   84          
+   57   1          DMA_UART3_ClearFIFO();              //清空串口DMA接收FIFO缓冲区
+   58   1          DMA_UART3_ClearRxFlag();            //清除串口接收DMA中断标志
+   59   1          DMA_UART3_SetRxBusPriority(0);      //设置总线访问为最低优先级
+   60   1          DMA_UART3_SetRxIntPriority(0);      //设置中断为最低优先级
+   61   1          DMA_UART3_EnableRxInt();            //使能串口3DMA接收中断
+   62   1          DMA_UART3_EnableRx();               //使能串口3DMA接收功能
+   63   1      //  DMA_UART3_TriggerRx();              //触发串口3DMA接收
+   64   1      
+   65   1          UART3_SetTxFlag();                  //设置发送标志以配合printf函数
+   66   1      
+   67   1          //<<AICUBE_USER_UART3_INITIAL_BEGIN>>
+   68   1          // 在此添加用户初始化代码  
+   69   1          //<<AICUBE_USER_UART3_INITIAL_END>>
+   70   1      }
+   71          
+   72          ////////////////////////////////////////
+   73          // 重写printf字符发送重定向函数
+   74          // 入口参数: dat (printf函数待打印的字符)
+   75          // 函数返回: 需要返回入口参数的数据
+   76          ////////////////////////////////////////
+   77          char putchar (char dat)                 //将串口3和printf函数绑定
+   78          {
+   79   1          while (!UART3_CheckTxFlag());
+   80   1          UART3_ClearTxFlag();
+   81   1          UART3_SendData(dat);
+   82   1      
+   83   1          return dat;
+   84   1      }
    85          
-   86          ////////////////////////////////////////
-   87          // 串口3发送DMA中断服务程序
-   88          // 入口参数: 无
-   89          // 函数返回: 无
-   90          ////////////////////////////////////////
-   91          void DMA_UART3TX_ISR(void) interrupt DMA_UR3T_VECTOR
-   92          {
-   93   1          //<<AICUBE_USER_UART3_ISR_CODE2_BEGIN>>
-   94   1          // 在此添加中断函数用户代码  
-   95   1          if (DMA_UART3_CheckTxFlag())        //判断串口发送DMA中断
-   96   1          {
-   97   2              DMA_UART3_ClearTxFlag();        //清除串口发送DMA中断标志
-   98   2          }
-   99   1          //<<AICUBE_USER_UART3_ISR_CODE2_END>>
-  100   1      }
-  101          
-  102          ////////////////////////////////////////
-  103          // 串口3接收DMA中断服务程序
-  104          // 入口参数: 无
-  105          // 函数返回: 无
-  106          ////////////////////////////////////////
-  107          void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
-  108          {
-  109   1          //<<AICUBE_USER_UART3_ISR_CODE3_BEGIN>>
-  110   1          // 在此添加中断函数用户代码  
-  111   1          if (DMA_UART3_CheckRxFlag())        //判断串口接收DMA中断
-  112   1          {
-  113   2              DMA_UART3_ClearRxFlag();        //清除串口接收DMA中断标志
-  114   2          }
-  115   1          //<<AICUBE_USER_UART3_ISR_CODE3_END>>
-  116   1      }
-  117          
+   86          
+   87          ////////////////////////////////////////
+   88          // 串口3发送DMA中断服务程序
+   89          // 入口参数: 无
+   90          // 函数返回: 无
+   91          ////////////////////////////////////////
+   92          void DMA_UART3TX_ISR(void) interrupt DMA_UR3T_VECTOR
+   93          {
+   94   1          //<<AICUBE_USER_UART3_ISR_CODE2_BEGIN>>
+   95   1          // 在此添加中断函数用户代码  
+   96   1          if (DMA_UART3_CheckTxFlag())        //判断串口发送DMA中断
+   97   1          {
+   98   2              DMA_UART3_ClearTxFlag();        //清除串口发送DMA中断标志
+   99   2          }
+  100   1          //<<AICUBE_USER_UART3_ISR_CODE2_END>>
+  101   1      }
+  102          
+  103          ////////////////////////////////////////
+  104          // 串口3接收DMA中断服务程序
+  105          // 入口参数: 无
+  106          // 函数返回: 无
+  107          ////////////////////////////////////////
+  108          void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
+  109          {
+  110   1          //<<AICUBE_USER_UART3_ISR_CODE3_BEGIN>>
+  111   1          // TODO: 循环数组
+  112   1          if (DMA_UART3_CheckRxFlag())        //判断串口接收DMA中断
+  113   1          {
+  114   2              DMA_UART3_ClearRxFlag();        //清除串口接收DMA中断标志
+  115   2          }
+  116   1          //<<AICUBE_USER_UART3_ISR_CODE3_END>>
+  117   1      }
   118          
-  119          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-  120          // 在此添加用户函数实现代码  
-  121          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
-  122          
-C251 COMPILER V5.60.0,  uart                                                               06/03/26  20:20:58  PAGE 3   
+  119          
+  120          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+  121          //! 在改变dma数组的时候注意修改len的值
+  122          void UART_DMA_Send(uint8_t *pData, uint8_t len)
+C251 COMPILER V5.60.0,  uart                                                               06/03/26  21:24:31  PAGE 3   
 
-  123          
+  123          {
+  124   1          if(len > 22) len = 22;
+  125   1          if (!DMA_UART3_CheckTxFlag())
+  126   1          {
+  127   2              memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
+  128   2              memcpy(pu8UR3DMATxBuffer, pData, len);
+  129   2              DMA_UART3_TriggerTx();
+  130   2          }
+  131   1      }
+  132          
+  133          //! 在改变dma数组的时候注意修改len的值
+  134          void UART_DMA_Receive(uint8_t *pData, uint8_t len)
+  135          {
+  136   1          if(len > 18) len = 18;
+  137   1          if (!DMA_UART3_CheckRxFlag())
+  138   1          {
+  139   2              // DMA_UART3_SetRxAmount(len - 1); //? 注意DMA接收时会多接收一个字节，所以这里�
+             -��置为len-1
+  140   2              memcpy(pData, pu8UR3DMARxBuffer, len);
+  141   2              DMA_UART3_TriggerRx();
+  142   2          }
+  143   1      }
+  144          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+  145          
+  146          
 
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =       338     ------
+  code size            =       486     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------
   pdata size           =    ------     ------
-  xdata size           =        38     ------
+  xdata size           =        40     ------
   xdata-const size     =    ------     ------
-  edata size           =    ------     ------
+  edata size           =        37          4
   bit size             =    ------     ------
   ebit size            =    ------     ------
   bitaddressable size  =    ------     ------
@@ -156,7 +180,7 @@ Module Information          Static   Overlayable
   far data size        =    ------     ------
   huge data size       =    ------     ------
   const size           =    ------     ------
-  hconst size          =    ------     ------
+  hconst size          =         5     ------
 End of Module Information.
 
 

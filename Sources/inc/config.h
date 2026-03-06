@@ -35,7 +35,9 @@
 
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
-// 在此添加用户头文件包含  
+#include "crc8.h"
+#include "uart_send_def.h"
+#include "uart_controller.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 

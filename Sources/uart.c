@@ -19,12 +19,13 @@
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-// 在此添加用户全局变量定义、用户宏定义以及函数声明  
+uint8_t rxd_buf[18 * 2];    //串口接收缓冲区数组
+uint8_t rxd_buf_index = 0;  //串口接收缓冲区索引
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 
-uint8_t xdata pu8UR3DMATxBuffer[21];    //串口3DMA发送缓冲区数组
-uint8_t xdata pu8UR3DMARxBuffer[17];    //串口3DMA接收缓冲区数组
+uint8_t xdata pu8UR3DMATxBuffer[22];    //串口3DMA发送缓冲区数组
+uint8_t xdata pu8UR3DMARxBuffer[18];    //串口3DMA接收缓冲区数组
 
 ////////////////////////////////////////
 // 串口3初始化函数
@@ -40,7 +41,7 @@ void UART3_Init(void)
     UART3_EnableRx();                   //使能串口3接收数据
     UART3_Mode0();                      //设置串口3为模式0 (8位数据可变波特率)
 
-    DMA_UART3_SetTxAmount(20);          //设置串口DMA发送总字节数
+    DMA_UART3_SetTxAmount(21);          //设置串口DMA发送总字节数
     DMA_UART3_SetTxAddress(pu8UR3DMATxBuffer); //设置串口DMA发送缓冲区地址
     DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟）
     DMA_UART3_ClearTxFlag();            //清除串口发送DMA中断标志
@@ -50,7 +51,7 @@ void UART3_Init(void)
     DMA_UART3_EnableTx();               //使能串口3DMA发送功能
 //  DMA_UART3_TriggerTx();              //触发串口3DMA发送
 
-    DMA_UART3_SetRxAmount(16);          //设置串口DMA接收总字节数
+    DMA_UART3_SetRxAmount(17);          //设置串口DMA接收总字节数
     DMA_UART3_SetRxAddress(pu8UR3DMARxBuffer); //设置串口DMA接收缓冲区地址
     DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟）
     DMA_UART3_ClearFIFO();              //清空串口DMA接收FIFO缓冲区
@@ -107,7 +108,7 @@ void DMA_UART3TX_ISR(void) interrupt DMA_UR3T_VECTOR
 void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
 {
     //<<AICUBE_USER_UART3_ISR_CODE3_BEGIN>>
-    // 在此添加中断函数用户代码  
+    // TODO: 循环数组
     if (DMA_UART3_CheckRxFlag())        //判断串口接收DMA中断
     {
         DMA_UART3_ClearRxFlag();        //清除串口接收DMA中断标志
@@ -117,7 +118,29 @@ void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
 
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-// 在此添加用户函数实现代码  
+//! 在改变dma数组的时候注意修改len的值
+void UART_DMA_Send(uint8_t *pData, uint8_t len)
+{
+    if(len > 22) len = 22;
+    if (!DMA_UART3_CheckTxFlag())
+    {
+        memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
+        memcpy(pu8UR3DMATxBuffer, pData, len);
+        DMA_UART3_TriggerTx();
+    }
+}
+
+//! 在改变dma数组的时候注意修改len的值
+void UART_DMA_Receive(uint8_t *pData, uint8_t len)
+{
+    if(len > 18) len = 18;
+    if (!DMA_UART3_CheckRxFlag())
+    {
+        // DMA_UART3_SetRxAmount(len - 1); //? 注意DMA接收时会多接收一个字节，所以这里设置为len-1
+        memcpy(pData, pu8UR3DMARxBuffer, len);
+        DMA_UART3_TriggerRx();
+    }
+}
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 
 
