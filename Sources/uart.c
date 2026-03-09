@@ -14,13 +14,14 @@
 
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
-// 在此添加用户头文件包含  
+
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-uint8_t rxd_buf[18 * 2];    //串口接收缓冲区数组
-uint8_t rxd_buf_index = 0;  //串口接收缓冲区索引
+uint8_t rxd_buf[18 * 5];    // 循环数组，存储串口接收的数据，长度为18字节（DMA接收缓冲区大小）乘以5（循环次数）
+uint8_t write_ptr = 0;      // 循环数组的当前索引，初始值为0
+uint8_t read_ptr = 0;       // 循环数组的读取索引，初始值为0
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 
@@ -108,16 +109,28 @@ void DMA_UART3TX_ISR(void) interrupt DMA_UR3T_VECTOR
 void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
 {
     //<<AICUBE_USER_UART3_ISR_CODE3_BEGIN>>
-    // TODO: 循环数组
     if (DMA_UART3_CheckRxFlag())        //判断串口接收DMA中断
     {
         DMA_UART3_ClearRxFlag();        //清除串口接收DMA中断标志
     }
+    Write_RXD_Buffer(pu8UR3DMARxBuffer, sizeof(pu8UR3DMARxBuffer));
+    memset(pu8UR3DMARxBuffer, 0x00, sizeof(pu8UR3DMARxBuffer)); // FIXME: 我不确定是否需要在每次接收后清空DMA接收缓冲区，但为了安全起见先清空。但是之前没清空的时候也没出过问题，所以可能不清空也行。
+    DMA_UART3_TriggerRx();
     //<<AICUBE_USER_UART3_ISR_CODE3_END>>
 }
 
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+void Write_RXD_Buffer(uint8_t *dat, uint8_t len)
+{
+    uint8_t i;
+    for (i = 0; i < len; i++)
+    {
+        rxd_buf[write_ptr] = dat[i];  // 将数据写入循环数组
+        write_ptr = (write_ptr + 1) % (18 * 5); // 更新写指针，循环回到数组开头
+    }
+}
+
 //! 在改变dma数组的时候注意修改len的值
 void UART_DMA_Send(uint8_t *pData, uint8_t len)
 {
@@ -130,7 +143,7 @@ void UART_DMA_Send(uint8_t *pData, uint8_t len)
     }
 }
 
-//! 在改变dma数组的时候注意修改len的值
+//! 在改变dma数组的时候注意修改len的值(unused)
 void UART_DMA_Receive(uint8_t *pData, uint8_t len)
 {
     if(len > 18) len = 18;
@@ -138,6 +151,7 @@ void UART_DMA_Receive(uint8_t *pData, uint8_t len)
     {
         // DMA_UART3_SetRxAmount(len - 1); //? 注意DMA接收时会多接收一个字节，所以这里设置为len-1
         memcpy(pData, pu8UR3DMARxBuffer, len);
+        memset(pu8UR3DMARxBuffer, 0x00, sizeof(pu8UR3DMARxBuffer)); // FIXME: 我不确定是否需要在每次接收后清空DMA接收缓冲区，但为了安全起见先清空。但是之前没清空的时候也没出过问题，所以可能不清空也行。
         DMA_UART3_TriggerRx();
     }
 }

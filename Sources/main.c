@@ -39,13 +39,15 @@ void main(void)
 
     //<<AICUBE_USER_MAIN_CODE_BEGIN>>
     // 在此添加主函数中运行一次的用户代码  
+    DMA_UART3_TriggerRx(); // 串口3触发dma
     printf("Hello World !\n");
     //<<AICUBE_USER_MAIN_CODE_END>>
 
     while (1)
     {
         //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
-        // 在此添加主函数中用户主循环代码  
+        send_messages(&replyframe);
+        receive_messages(&cmdframe);
         //<<AICUBE_USER_MAIN_LOOP_END>>
     }
 }

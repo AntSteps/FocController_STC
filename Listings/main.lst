@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 1   
+C251 COMPILER V5.60.0,  main                                                               09/03/26  14:12:06  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE main
@@ -49,98 +49,100 @@ stmt  level    source
    39   1      
    40   1          //<<AICUBE_USER_MAIN_CODE_BEGIN>>
    41   1          // 在此添加主函数中运行一次的用户代码  
-   42   1          printf("Hello World !\n");
-   43   1          //<<AICUBE_USER_MAIN_CODE_END>>
-   44   1      
-   45   1          while (1)
-   46   1          {
-   47   2              //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
-   48   2              // 在此添加主函数中用户主循环代码  
-   49   2              //<<AICUBE_USER_MAIN_LOOP_END>>
-   50   2          }
-   51   1      }
-   52          
-   53          ////////////////////////////////////////
-   54          // 系统初始化函数
-   55          // 入口参数: 无
-   56          // 函数返回: 无
-   57          ////////////////////////////////////////
-   58          void SYS_Init(void)
-C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 2   
+   42   1          DMA_UART3_TriggerRx(); // 串口3触发dma
+   43   1          printf("Hello World !\n");
+   44   1          //<<AICUBE_USER_MAIN_CODE_END>>
+   45   1      
+   46   1          while (1)
+   47   1          {
+   48   2              //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
+   49   2              send_messages(&replyframe);
+   50   2              receive_messages(&cmdframe);
+   51   2              //<<AICUBE_USER_MAIN_LOOP_END>>
+   52   2          }
+   53   1      }
+   54          
+   55          ////////////////////////////////////////
+   56          // 系统初始化函数
+   57          // 入口参数: 无
+   58          // 函数返回: 无
+C251 COMPILER V5.60.0,  main                                                               09/03/26  14:12:06  PAGE 2   
 
-   59          {
-   60   1          EnableAccessXFR();                  //使能访问扩展XFR
-   61   1          AccessCodeFastest();                //设置最快速度访问程序代码
-   62   1          AccessIXramFastest();               //设置最快速度访问内部XDATA
-   63   1          IAP_SetTimeBase();                  //设置IAP等待参数,产生1us时基
-   64   1      
-   65   1          //<<AICUBE_USER_PREINITIAL_CODE_BEGIN>>
-   66   1          // 在此添加用户预初始化代码  
-   67   1          //<<AICUBE_USER_PREINITIAL_CODE_END>>
-   68   1      
-   69   1          PORT0_Init();                       //P0口初始化
-   70   1          PORT1_Init();                       //P1口初始化
-   71   1          PORT2_Init();                       //P2口初始化
-   72   1          PORT3_Init();                       //P3口初始化
-   73   1          PORT5_Init();                       //P5口初始化
-   74   1          CLK_Init();                         //时钟模块初始化
-   75   1          TIMER3_Init();                      //定时器3初始化
-   76   1          UART3_Init();                       //串口3初始化
-   77   1          ADC_Init();                         //ADC初始化
-   78   1          SPI_Init();                         //SPI初始化
-   79   1          PWMA_Init();                        //高级PWMA初始化
-   80   1          MATHLIB_Init();                     //MATH库初始化
-   81   1      
-   82   1          //<<AICUBE_USER_INITIAL_CODE_BEGIN>>
-   83   1          // 在此添加用户初始化代码  
-   84   1          //<<AICUBE_USER_INITIAL_CODE_END>>
-   85   1      
-   86   1          EnableGlobalInt();                  //使能全局中断
-   87   1      }
-   88          
-   89          ////////////////////////////////////////
-   90          // 微秒延时函数
-   91          // 入口参数: us (设置延时的微秒值)
-   92          // 函数返回: 无
-   93          ////////////////////////////////////////
-   94          void delay_us(uint16_t us)
-   95          {
-   96   1          do
-   97   1          {
-   98   2              NOP(34);                        //(MAIN_Fosc + 500000) / 1000000 - 6
-   99   2          } while (--us);
-  100   1      }
-  101          
-  102          
-  103          ////////////////////////////////////////
-  104          // 毫秒延时函数
-  105          // 入口参数: ms (设置延时的毫秒值)
-  106          // 函数返回: 无
-  107          ////////////////////////////////////////
-  108          void delay_ms(uint16_t ms)
-  109          {
-  110   1          uint16_t i;
-  111   1      
-  112   1          do
-  113   1          {
-  114   2              i = MAIN_Fosc / 6000;
-  115   2              while (--i);
-  116   2          } while (--ms);
-  117   1      }
-  118          
-  119          
-  120          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-  121          // 在此添加用户函数实现代码  
-  122          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
-  123          
-  124          
-C251 COMPILER V5.60.0,  main                                                               06/03/26  21:23:00  PAGE 3   
+   59          ////////////////////////////////////////
+   60          void SYS_Init(void)
+   61          {
+   62   1          EnableAccessXFR();                  //使能访问扩展XFR
+   63   1          AccessCodeFastest();                //设置最快速度访问程序代码
+   64   1          AccessIXramFastest();               //设置最快速度访问内部XDATA
+   65   1          IAP_SetTimeBase();                  //设置IAP等待参数,产生1us时基
+   66   1      
+   67   1          //<<AICUBE_USER_PREINITIAL_CODE_BEGIN>>
+   68   1          // 在此添加用户预初始化代码  
+   69   1          //<<AICUBE_USER_PREINITIAL_CODE_END>>
+   70   1      
+   71   1          PORT0_Init();                       //P0口初始化
+   72   1          PORT1_Init();                       //P1口初始化
+   73   1          PORT2_Init();                       //P2口初始化
+   74   1          PORT3_Init();                       //P3口初始化
+   75   1          PORT5_Init();                       //P5口初始化
+   76   1          CLK_Init();                         //时钟模块初始化
+   77   1          TIMER3_Init();                      //定时器3初始化
+   78   1          UART3_Init();                       //串口3初始化
+   79   1          ADC_Init();                         //ADC初始化
+   80   1          SPI_Init();                         //SPI初始化
+   81   1          PWMA_Init();                        //高级PWMA初始化
+   82   1          MATHLIB_Init();                     //MATH库初始化
+   83   1      
+   84   1          //<<AICUBE_USER_INITIAL_CODE_BEGIN>>
+   85   1          // 在此添加用户初始化代码  
+   86   1          //<<AICUBE_USER_INITIAL_CODE_END>>
+   87   1      
+   88   1          EnableGlobalInt();                  //使能全局中断
+   89   1      }
+   90          
+   91          ////////////////////////////////////////
+   92          // 微秒延时函数
+   93          // 入口参数: us (设置延时的微秒值)
+   94          // 函数返回: 无
+   95          ////////////////////////////////////////
+   96          void delay_us(uint16_t us)
+   97          {
+   98   1          do
+   99   1          {
+  100   2              NOP(34);                        //(MAIN_Fosc + 500000) / 1000000 - 6
+  101   2          } while (--us);
+  102   1      }
+  103          
+  104          
+  105          ////////////////////////////////////////
+  106          // 毫秒延时函数
+  107          // 入口参数: ms (设置延时的毫秒值)
+  108          // 函数返回: 无
+  109          ////////////////////////////////////////
+  110          void delay_ms(uint16_t ms)
+  111          {
+  112   1          uint16_t i;
+  113   1      
+  114   1          do
+  115   1          {
+  116   2              i = MAIN_Fosc / 6000;
+  117   2              while (--i);
+  118   2          } while (--ms);
+  119   1      }
+  120          
+  121          
+  122          //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
+  123          // 在此添加用户函数实现代码  
+  124          //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
+C251 COMPILER V5.60.0,  main                                                               09/03/26  14:12:06  PAGE 3   
 
+  125          
+  126          
 
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =       162     ------
+  code size            =       192     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------

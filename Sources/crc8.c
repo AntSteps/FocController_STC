@@ -34,32 +34,26 @@ uint8_t Mem_CRC8_Check(uint8_t *dat, int size, uint8_t has_crc)
 {
     uint8_t crc = 0x00;
     int i;
-    int calc_size = size; // 默认计算整个数据包
+    int calc_size = size;
 
-    // ===== 模式1：验证包含CRC的数据包 =====
     if (has_crc)
     {
         if (size < 1)
-            return 0xFF;      // 长度非法，返回错误码
-        calc_size = size - 1; // 只计算前size-1个字节（排除最后1字节的CRC）
+            return 0xFF;
+        calc_size = size - 1;
     }
 
-    // 核心CRC8计算逻辑
     for (i = 0; i < calc_size; i++)
     {
         crc = CRC8_TAB[crc ^ dat[i]];
     }
 
-    // ===== 根据模式返回结果 =====
     if (has_crc)
     {
-        // 验证模式：对比计算出的CRC和数据包最后1字节的CRC
         return (crc == dat[size - 1]) ? 0 : crc;
-        // 正确返回0，错误返回计算出的CRC值（非0）
     }
     else
     {
-        // 计算模式：返回纯数据的CRC8值
         return crc;
     }
 }

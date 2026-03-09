@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  mathlib                                                            06/03/26  21:23:02  PAGE 1   
+C251 COMPILER V5.60.0,  mathlib                                                            09/03/26  14:06:08  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE mathlib
@@ -67,7 +67,7 @@ Module Information          Static   Overlayable
   xdata size           =    ------     ------
   xdata-const size     =    ------     ------
   edata size           =    ------     ------
-C251 COMPILER V5.60.0,  mathlib                                                            06/03/26  21:23:02  PAGE 2   
+C251 COMPILER V5.60.0,  mathlib                                                            09/03/26  14:06:08  PAGE 2   
 
   bit size             =    ------     ------
   ebit size            =    ------     ------

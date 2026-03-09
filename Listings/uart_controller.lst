@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  uart_controller                                                    06/03/26  21:23:38  PAGE 1   
+C251 COMPILER V5.60.0,  uart_controller                                                    09/03/26  14:06:08  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE uart_controller
@@ -14,77 +14,99 @@ stmt  level    source
     4          ReplyFrame replyframe = {0};
     5          ReplyFrame replyframe_to_send = {0}; // 储存大小端转换后的发送帧
     6          
-    7          uint16_t buf_ptr = 0; // 接收缓冲区指针
-    8          
-    9          uint32_t swap32(uint32_t x)
-   10          {
-   11   1          return ((x & 0x000000FF) << 24) |
-   12   1                 ((x & 0x0000FF00) << 8)  |
-   13   1                 ((x & 0x00FF0000) >> 8)  |
-   14   1                 ((x & 0xFF000000) >> 24);
-   15   1      }
-   16          
-   17          // 浮点型大小端转换函数（STC平台通用）
-   18          float swap_float(float x)
-   19          {
-   20   1          union {
-   21   1              float f;
-   22   1              uint32_t u32;
-   23   1          } tmp;
-   24   1          tmp.f = x;
-   25   1          tmp.u32 = swap32(tmp.u32);
-   26   1          return tmp.f;
-   27   1      }
-   28          
-   29          uint16_t swap16(uint16_t x)
-   30          {
-   31   1          // 拆分高/低字节并交换
-   32   1          uint8_t high_byte = (x >> 8) & 0xFF;  // 取高8位
-   33   1          uint8_t low_byte  = x & 0xFF;         // 取低8位
-   34   1          return (uint16_t)(low_byte << 8) | high_byte;  // 交换后合并
-   35   1      }
-   36          
-   37          void send_messages(ReplyFrame *frame)
-   38          {
-   39   1          replyframe_to_send.head = swap16(frame->head);
-   40   1          replyframe_to_send.id = frame->id;
-   41   1          replyframe_to_send.velocity = swap_float(frame->velocity);
-   42   1          replyframe_to_send.position = swap_float(frame->position);
-   43   1          replyframe_to_send.current = swap_float(frame->current);
-   44   1          replyframe_to_send.voltage = swap_float(frame->voltage);
-   45   1          replyframe_to_send.status = frame->status;
-   46   1          replyframe_to_send.seq = frame->seq;
-   47   1          replyframe_to_send.crc8 = Mem_CRC8_Check((uint8_t *)frame, sizeof(ReplyFrame) - 1, 0); // 计算CRC8�
+    7          uint32_t swap32(uint32_t x)
+    8          {
+    9   1          return ((x & 0x000000FF) << 24) |
+   10   1                 ((x & 0x0000FF00) << 8)  |
+   11   1                 ((x & 0x00FF0000) >> 8)  |
+   12   1                 ((x & 0xFF000000) >> 24);
+   13   1      }
+   14          
+   15          // 浮点型大小端转换函数（STC平台通用）
+   16          float swap_float(float x)
+   17          {
+   18   1          union {
+   19   1              float f;
+   20   1              uint32_t u32;
+   21   1          } tmp;
+   22   1          tmp.f = x;
+   23   1          tmp.u32 = swap32(tmp.u32);
+   24   1          return tmp.f;
+   25   1      }
+   26          
+   27          uint16_t swap16(uint16_t x)
+   28          {
+   29   1          // 拆分高/低字节并交换
+   30   1          uint8_t high_byte = (x >> 8) & 0xFF;  // 取高8位
+   31   1          uint8_t low_byte  = x & 0xFF;         // 取低8位
+   32   1          return (uint16_t)(low_byte << 8) | high_byte;  // 交换后合并
+   33   1      }
+   34          
+   35          void send_messages(ReplyFrame *frame)
+   36          {
+   37   1          replyframe_to_send.head = swap16(frame->head);
+   38   1          replyframe_to_send.id = frame->id;
+   39   1          replyframe_to_send.velocity = swap_float(frame->velocity);
+   40   1          replyframe_to_send.position = swap_float(frame->position);
+   41   1          replyframe_to_send.current = swap_float(frame->current);
+   42   1          replyframe_to_send.voltage = swap_float(frame->voltage);
+   43   1          replyframe_to_send.status = frame->status;
+   44   1          replyframe_to_send.seq = frame->seq;
+   45   1          replyframe_to_send.crc8 = Mem_CRC8_Check((uint8_t *)frame, sizeof(ReplyFrame) - 1, 0); // 计算CRC8�
              -��验码
-   48   1      
-   49   1          UART_DMA_Send((uint8_t *)&replyframe_to_send, sizeof(ReplyFrame));
-   50   1      }
-   51          
-   52          // 接收并解析数据帧，返回0表示成功，1表示失败（如CRC校验失败或未找到帧头�
-             -��
-   53          uint8_t receive_messages(CmdFrame *frame)
-   54          {
-   55   1          // 这里假设rxd_buf已经被DMA填充了接收到的数据 (应该在DMA接收中断里处理数�
-             -�并调用这个函数)
-C251 COMPILER V5.60.0,  uart_controller                                                    06/03/26  21:23:38  PAGE 2   
+   46   1      
+   47   1          UART_DMA_Send((uint8_t *)&replyframe_to_send, sizeof(ReplyFrame));
+   48   1      }
+   49          
+   50          // 返回0表示更新
+   51          uint8_t receive_messages(CmdFrame *frame)
+   52          {
+   53   1          // 这里rxd_buf已经被DMA填充了接收到的数据
+   54   1          if (read_ptr == write_ptr)
+   55   1              return 1; // null_frame.
+   56   1      
+   57   1          while (read_ptr != write_ptr)
+C251 COMPILER V5.60.0,  uart_controller                                                    09/03/26  14:06:08  PAGE 2   
 
-   56   1          // TODO: 实际使用时需要根据具体协议实现帧头检测、数据提取和CRC校验等逻�
-             -�
-   57   1          return 1;
-   58   1      }
-*** WARNING C47 IN LINE 53 OF Sources\uart_controller.c: 'frame': unreferenced parameter
+   58   1          {
+   59   2              if (rxd_buf[read_ptr] == 0x11 && rxd_buf[(read_ptr + 1) % (18 * 5)] == 0x45) // 检测帧头0x114
+             -5
+   60   2              {
+   61   3                  if ((write_ptr + 18 * 5 - read_ptr) % (18 * 5) >= sizeof(CmdFrame))
+   62   3                  {
+   63   4                      uint8_t temp_buf[sizeof(CmdFrame)];
+   64   4                      memcpy(temp_buf, &rxd_buf[read_ptr], sizeof(CmdFrame));
+   65   4      
+   66   4                      if (!Mem_CRC8_Check(temp_buf, sizeof(CmdFrame), 1))
+   67   4                      {
+   68   5                          *frame = *(CmdFrame *)temp_buf;
+   69   5                          read_ptr = (read_ptr + sizeof(CmdFrame)) % (18 * 5);
+   70   5                          return 0;
+   71   5                      }
+   72   4                      else
+   73   4                      {
+   74   5                          read_ptr = (read_ptr + sizeof(CmdFrame)) % (18 * 5);
+   75   5                          // debug here.
+   76   5                          continue;
+   77   5                      }
+   78   4                  }
+   79   3              }
+   80   2              read_ptr = (read_ptr + 1) % (18 * 5);
+   81   2          }
+   82   1          return 1;
+   83   1      }
 
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =       177     ------
+  code size            =       382     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------
   pdata size           =    ------     ------
   xdata size           =    ------     ------
   xdata-const size     =    ------     ------
-  edata size           =        64          4
+  edata size           =        62         22
   bit size             =    ------     ------
   ebit size            =    ------     ------
   bitaddressable size  =    ------     ------
@@ -92,8 +114,8 @@ Module Information          Static   Overlayable
   far data size        =    ------     ------
   huge data size       =    ------     ------
   const size           =    ------     ------
-  hconst size          =        80     ------
+  hconst size          =        74     ------
 End of Module Information.
 
 
-C251 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

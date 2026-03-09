@@ -4,8 +4,6 @@ CmdFrame cmdframe = {0};
 ReplyFrame replyframe = {0};
 ReplyFrame replyframe_to_send = {0}; // 储存大小端转换后的发送帧
 
-uint16_t buf_ptr = 0; // 接收缓冲区指针
-
 uint32_t swap32(uint32_t x)
 {
     return ((x & 0x000000FF) << 24) |
@@ -49,10 +47,37 @@ void send_messages(ReplyFrame *frame)
     UART_DMA_Send((uint8_t *)&replyframe_to_send, sizeof(ReplyFrame));
 }
 
-// 接收并解析数据帧，返回0表示成功，1表示失败（如CRC校验失败或未找到帧头）
+// 返回0表示更新
 uint8_t receive_messages(CmdFrame *frame)
 {
-    // 这里假设rxd_buf已经被DMA填充了接收到的数据 (应该在DMA接收中断里处理数据并调用这个函数)
-    // TODO: 实际使用时需要根据具体协议实现帧头检测、数据提取和CRC校验等逻辑
+    // 这里rxd_buf已经被DMA填充了接收到的数据
+    if (read_ptr == write_ptr)
+        return 1; // null_frame.
+
+    while (read_ptr != write_ptr)
+    {
+        if (rxd_buf[read_ptr] == 0x11 && rxd_buf[(read_ptr + 1) % (18 * 5)] == 0x45) // 检测帧头0x1145
+        {
+            if ((write_ptr + 18 * 5 - read_ptr) % (18 * 5) >= sizeof(CmdFrame))
+            {
+                uint8_t temp_buf[sizeof(CmdFrame)];
+                memcpy(temp_buf, &rxd_buf[read_ptr], sizeof(CmdFrame));
+
+                if (!Mem_CRC8_Check(temp_buf, sizeof(CmdFrame), 1))
+                {
+                    *frame = *(CmdFrame *)temp_buf;
+                    read_ptr = (read_ptr + sizeof(CmdFrame)) % (18 * 5);
+                    return 0;
+                }
+                else
+                {
+                    read_ptr = (read_ptr + sizeof(CmdFrame)) % (18 * 5);
+                    // debug here.
+                    continue;
+                }
+            }
+        }
+        read_ptr = (read_ptr + 1) % (18 * 5);
+    }
     return 1;
 }

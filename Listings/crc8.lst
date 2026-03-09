@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  crc8                                                               06/03/26  21:23:02  PAGE 1   
+C251 COMPILER V5.60.0,  crc8                                                               09/03/26  14:05:38  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE crc8
@@ -44,37 +44,31 @@ stmt  level    source
    34          {
    35   1          uint8_t crc = 0x00;
    36   1          int i;
-   37   1          int calc_size = size; // 默认计算整个数据包
+   37   1          int calc_size = size;
    38   1      
-   39   1          // ===== 模式1：验证包含CRC的数据包 =====
-   40   1          if (has_crc)
-   41   1          {
-   42   2              if (size < 1)
-   43   2                  return 0xFF;      // 长度非法，返回错误码
-   44   2              calc_size = size - 1; // 只计算前size-1个字节（排除最后1字节的CRC）
-   45   2          }
-   46   1      
-   47   1          // 核心CRC8计算逻辑
-   48   1          for (i = 0; i < calc_size; i++)
-   49   1          {
-   50   2              crc = CRC8_TAB[crc ^ dat[i]];
-   51   2          }
-   52   1      
-   53   1          // ===== 根据模式返回结果 =====
-   54   1          if (has_crc)
-   55   1          {
-   56   2              // 验证模式：对比计算出的CRC和数据包最后1字节的CRC
-   57   2              return (crc == dat[size - 1]) ? 0 : crc;
-   58   2              // 正确返回0，错误返回计算出的CRC值（非0）
-C251 COMPILER V5.60.0,  crc8                                                               06/03/26  21:23:02  PAGE 2   
+   39   1          if (has_crc)
+   40   1          {
+   41   2              if (size < 1)
+   42   2                  return 0xFF;
+   43   2              calc_size = size - 1;
+   44   2          }
+   45   1      
+   46   1          for (i = 0; i < calc_size; i++)
+   47   1          {
+   48   2              crc = CRC8_TAB[crc ^ dat[i]];
+   49   2          }
+   50   1      
+   51   1          if (has_crc)
+   52   1          {
+   53   2              return (crc == dat[size - 1]) ? 0 : crc;
+   54   2          }
+   55   1          else
+   56   1          {
+   57   2              return crc;
+   58   2          }
+C251 COMPILER V5.60.0,  crc8                                                               09/03/26  14:05:38  PAGE 2   
 
-   59   2          }
-   60   1          else
-   61   1          {
-   62   2              // 计算模式：返回纯数据的CRC8值
-   63   2              return crc;
-   64   2          }
-   65   1      }
+   59   1      }
 
 
 Module Information          Static   Overlayable
