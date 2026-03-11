@@ -1147,12 +1147,12 @@
 		<AutoReload>399</AutoReload>
 		<RepeatCounter>0</RepeatCounter>
 		<PreloadARR>0</PreloadARR>
-		<CounterAlign>1</CounterAlign>
+		<CounterAlign>2</CounterAlign>
 		<CounterDirection)>2</CounterDirection)>
 		<OnePulseMode>0</OnePulseMode>
 		<UpdateEventCtrl>1</UpdateEventCtrl>
 		<HallSensorCtrl>0</HallSensorCtrl>
-		<MasterTRGO>2</MasterTRGO>
+		<MasterTRGO>7</MasterTRGO>
 		<CCPreloadCtrl>1</CCPreloadCtrl>
 		<MasterSlaveMode>0</MasterSlaveMode>
 		<TriggerInput>0</TriggerInput>
@@ -1256,18 +1256,18 @@
 		<CaptureDivider_CC3>0</CaptureDivider_CC3>
 		<EnableCCnInt_CC4>0</EnableCCnInt_CC4>
 		<CCnPort_CC4>-1</CCnPort_CC4>
-		<EnableChannel_CC4>0</EnableChannel_CC4>
+		<EnableChannel_CC4>1</EnableChannel_CC4>
 		<CCnDirection_CC4>0</CCnDirection_CC4>
 		<POutputMode_CC4>0</POutputMode_CC4>
 		<NOutputMode_CC4>0</NOutputMode_CC4>
 		<ETRClearOutput_CC4>0</ETRClearOutput_CC4>
-		<OutputMode_CC4>0</OutputMode_CC4>
+		<OutputMode_CC4>7</OutputMode_CC4>
 		<FastOutput_CC4>0</FastOutput_CC4>
 		<PreloadCCR_CC4>0</PreloadCCR_CC4>
 		<IdlePOutputState_CC4>0</IdlePOutputState_CC4>
 		<IdleNOutputState_CC4>0</IdleNOutputState_CC4>
-		<PWMDuty_CC4>100.000</PWMDuty_CC4>
-		<CompareValue_CC4>500</CompareValue_CC4>
+		<PWMDuty_CC4>95.000</PWMDuty_CC4>
+		<CompareValue_CC4>380</CompareValue_CC4>
 		<CaptureMap_CC4>0</CaptureMap_CC4>
 		<CaptureMode_CC4>0</CaptureMode_CC4>
 		<CaptureFilter_CC4>0</CaptureFilter_CC4>

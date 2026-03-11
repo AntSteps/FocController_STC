@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  spi                                                                09/03/26  14:06:08  PAGE 1   
+C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE spi
@@ -66,7 +66,7 @@ stmt  level    source
    55          
    56          ////////////////////////////////////////
    57          // SPI主机模式发送字节函数
-C251 COMPILER V5.60.0,  spi                                                                09/03/26  14:06:08  PAGE 2   
+C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 2   
 
    58          // 入口参数: dat (待发送的字节数据)
    59          // 函数返回: 无
@@ -135,7 +135,7 @@ Module Information          Static   Overlayable
   huge data size       =    ------     ------
   const size           =    ------     ------
   hconst size          =    ------     ------
-C251 COMPILER V5.60.0,  spi                                                                09/03/26  14:06:08  PAGE 3   
+C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 3   
 
 End of Module Information.
 

@@ -34,6 +34,7 @@ void PWMA_Init(void)
     PWMA_C1SwitchP0001();               //设置PWMA通道1数据端口: PWM1P (P0.0), PWM1N (P0.1)
     PWMA_C2SwitchP0203();               //设置PWMA通道2数据端口: PWM2P (P0.2), PWM2N (P0.3)
     PWMA_C3SwitchP1415();               //设置PWMA通道3数据端口: PWM3P (P1.4), PWM3N (P1.5)
+    PWMA_C4SwitchP1617();               //设置PWMA通道4数据端口: PWM4P (P1.6), PWM4N (P1.7)
 
     HSPWMA_Disable();                   //关闭高速模式，使用同步方式进行初始化
     PWMA_InternalClockMode();           //选择内部时钟模式
@@ -42,7 +43,7 @@ void PWMA_Init(void)
     PWMA_UnbufferARR();                 //关闭重载值寄存器预装载功能
     PWMA_SetCounter(0);                 //初始化计数值
     PWMA_SetDeadTime(0);                //设置死区时间为：无死区
-    PWMA_CenterAlignMode1();            //设置计数器计数为中央对齐模式
+    PWMA_CenterAlignMode2();            //设置计数器计数为中央对齐模式
     PWMA_ContinueMode();                //设置计数器为连续计数模式
     PWMA_SetRepeatCounter(0);           //设置重复计数次数
     PWMA_EnableUpdate();                //使能更新事件
@@ -87,12 +88,23 @@ void PWMA_Init(void)
     PWMA_EnablePWM3POutput();           //使能正极通道输出
     PWMA_DisablePWM3NOutput();          //关闭负极通道输出
 
+    PWMA_CC4PDisable();                 //关闭通道
+    PWMA_CC4Output();                   //使能通道输出功能
+    PWMA_CC4PEnable();                  //打开通道
+    PWM_UpdateDuty(PWMA_CH4, 380);      //设置通道的PWM占空比
+    PWMA_OC4REFPWMMode2();              //设置通道输出参考信号为PWM模式2信号
+    PWMA_DisableOC4FastMode();          //关闭通道快速输出
+    PWMA_UnbufferCCR4();                //关闭CCRn预装载功能
+    PWMA_DisableETRFClearOC4REF();      //通道输出不受ETI信号影响
+    PWMA_DisablePWM4POutput();          //关闭正极通道输出
+    PWMA_DisablePWM4NOutput();          //关闭负极通道输出
+
     PWMA_StandaloneMode();              //设置PWM定时器为独立模式
     PWMA_BufferCCOC();                  //使能捕获/比较控制位预装载功能
     PWMA_CCOCUpdateMode0();             //只在COMG为1时控制位才被更新
     PWMA_DisableTRGI();                 //关闭触发输入信号
     PWMA_PWM1PToTI();                   //关闭霍尔传感器控制功能
-    PWMA_UpdateAsTRGO();                //更新事件信号作为TRGO
+    PWMA_OC4REFAsTRGO();                //通道4的输出参考信号OC4REF作为TRGO
     PWMA_DisableExternalClock2();       //禁止外部时钟模式2
     PWMA_BRKDisable();                  //禁止刹车输入
     PWMA_DisableAutoOutput();           //禁止自动输出功能（只能软件设置MOE）
