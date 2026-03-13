@@ -1,8 +1,8 @@
 //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
 ////////////////////////////////////////
-// 在此添加用户文件头说明信息  
+// 在此添加用户文件头说明信息
 // 文件名称: main.c
-// 文件描述: 
+// 文件描述:
 // 文件版本: V1.0
 // 修改记录:
 //   1. (2026-03-06) 创建文件
@@ -14,12 +14,18 @@
 
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
-// 在此添加用户头文件包含  
+// 在此添加用户头文件包含
+#include "encoder.h"
+#include "pwm.h"
+#include "svpwm.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-// 在此添加用户全局变量定义、用户宏定义以及函数声明  
+// 在此添加用户全局变量定义、用户宏定义以及函数声明
+static float svpwm_angle = 0.0f; /* SVPWM角度 */
+static float svpwm_step = 0.02f; /* 角度步进，控制转速 */
+static float svpwm_mag = 0.1f;   /* 调制比，范围[0, 1] */
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 
@@ -32,13 +38,13 @@
 void main(void)
 {
     //<<AICUBE_USER_MAIN_INITIAL_BEGIN>>
-    // 在此添加用户主函数初始化代码  
+    // 在此添加用户主函数初始化代码
     //<<AICUBE_USER_MAIN_INITIAL_END>>
 
     SYS_Init();
 
     //<<AICUBE_USER_MAIN_CODE_BEGIN>>
-    // 在此添加主函数中运行一次的用户代码  
+    // 在此添加主函数中运行一次的用户代码
     DMA_UART3_TriggerRx(); // 串口3触发dma
     printf("Hello World !\n");
     //<<AICUBE_USER_MAIN_CODE_END>>
@@ -46,8 +52,15 @@ void main(void)
     while (1)
     {
         //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
-        send_messages(&replyframe);
-        receive_messages(&cmdframe);
+        /* SVPWM开环控制 */
+        svpwm_angle += svpwm_step;
+        if (svpwm_angle >= 6.283185f)
+            svpwm_angle -= 6.283185f; /* 2π = 6.283185 */
+
+        /* 调用SVPWM更新函数，角度+幅值输入 */
+        SVPWM_Update(svpwm_angle, svpwm_mag);
+
+        delay_us(100); /* 延时控制切换速度 */
         //<<AICUBE_USER_MAIN_LOOP_END>>
     }
 }
@@ -65,25 +78,27 @@ void SYS_Init(void)
     IAP_SetTimeBase();                  //设置IAP等待参数,产生1us时基
 
     //<<AICUBE_USER_PREINITIAL_CODE_BEGIN>>
-    // 在此添加用户预初始化代码  
+    // 在此添加用户预初始化代码
     //<<AICUBE_USER_PREINITIAL_CODE_END>>
 
-    PORT0_Init();                       //P0口初始化
-    PORT1_Init();                       //P1口初始化
-    PORT2_Init();                       //P2口初始化
-    PORT3_Init();                       //P3口初始化
-    PORT5_Init();                       //P5口初始化
-    CLK_Init();                         //时钟模块初始化
-    TIMER0_Init();                      //定时器0初始化
-    TIMER3_Init();                      //定时器3初始化
-    UART3_Init();                       //串口3初始化
-    ADC_Init();                         //ADC初始化
-    SPI_Init();                         //SPI初始化
-    PWMA_Init();                        //高级PWMA初始化
-    MATHLIB_Init();                     //MATH库初始化
+    PORT0_Init();   // P0口初始化
+    PORT1_Init();   // P1口初始化
+    PORT2_Init();   // P2口初始化
+    PORT3_Init();   // P3口初始化
+    PORT5_Init();   // P5口初始化
+    CLK_Init();     // 时钟模块初始化
+    TIMER0_Init();  // 定时器0初始化
+    TIMER3_Init();  // 定时器3初始化
+    UART3_Init();   // 串口3初始化
+    ADC_Init();     // ADC初始化
+    SPI_Init();     // SPI初始化
+    PWMA_Init();    /* 高级PWMA初始化 */
+    MATHLIB_Init(); /* MATH库初始化 */
+    SVPWM_Init();   /* SVPWM初始化 */
 
     //<<AICUBE_USER_INITIAL_CODE_BEGIN>>
-    // 在此添加用户初始化代码  
+    // 在此添加用户初始化代码
+    Encoder_Init();
     //<<AICUBE_USER_INITIAL_CODE_END>>
 
     EnableGlobalInt();                  //使能全局中断

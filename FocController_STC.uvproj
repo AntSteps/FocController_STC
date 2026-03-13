@@ -334,6 +334,11 @@
               <FileType>1</FileType>
               <FilePath>.\Sources\uart_controller.c</FilePath>
             </File>
+            <File>
+              <FileName>svpwm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\svpwm.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
