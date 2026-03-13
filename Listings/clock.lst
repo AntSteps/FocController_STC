@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  clock                                                              11/03/26  12:32:15  PAGE 1   
+C251 COMPILER V5.60.0,  clock                                                              13/03/26  16:06:14  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE clock
@@ -66,7 +66,7 @@ stmt  level    source
    56   1          CLK_HSIOCK_PLL();                   //选择PLL输出时钟作为高速外设时钟源
    57   1      
    58   1          //<<AICUBE_USER_CLOCK_INITIAL_BEGIN>>
-C251 COMPILER V5.60.0,  clock                                                              11/03/26  12:32:15  PAGE 2   
+C251 COMPILER V5.60.0,  clock                                                              13/03/26  16:06:14  PAGE 2   
 
    59   1          // 在此添加用户初始化代码  
    60   1          //<<AICUBE_USER_CLOCK_INITIAL_END>>

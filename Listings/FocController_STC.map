@@ -1,4 +1,4 @@
-L251 LINKER/LOCATER V4.66.93.0                                                          03/11/2026  12:40:54  PAGE 1
+L251 LINKER/LOCATER V4.66.93.0                                                          03/13/2026  16:06:16  PAGE 1
 
 
 L251 LINKER/LOCATER V4.66.93.0, INVOKED BY:
@@ -67,7 +67,7 @@ INPUT MODULES INCLUDED:
          COMMENT TYPE 0: C251 V5.58.7
   D:\MCU\KEIL5\KEIL_V5\C251\LIB\C2SXS.LIB (memset)
          COMMENT TYPE 0: C251 V5.58.7
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 2
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 2
 
 
   D:\MCU\KEIL5\KEIL_V5\C251\LIB\C2SXS.LIB (?C?INITEDATA_END)
@@ -80,7 +80,7 @@ BASE        START       END         USED      MEMORY CLASS
 ==========================================================
 000000H     000000H     0007FFH     000204H   EDATA
 000000H     000000H     0007FFH               HDATA
-FF0000H     FF0000H     FFFFFFH     0017FCH   CODE
+FF0000H     FF0000H     FFFFFFH     001830H   CODE
 000000H     FF0000H     FFFFFFH     000167H   HCONST
 010000H     010000H     01FFFFH     000028H   XDATA
 000020H.0   000020H.0   00002FH.7   000000H.2 BIT
@@ -110,11 +110,14 @@ START     STOP      LENGTH    ALIGN  RELOC    MEMORY CLASS   SEGMENT NAME
 010000H   010027H   000028H   BYTE   INSEG    XDATA          ?XD?UART
 010028H   FEFFFFH   FDFFD8H   ---    ---      **GAP**
 FF0000H   FF0002H   000003H   ---    OFFS..   CODE           ?CO?start251?4
-FF0003H   FF0027H   000025H   BYTE   INSEG    CODE           ?PR?HSPWMA_WRITEREG?PWM
-FF0028H   FF002AH   000003H   ---    ---      **GAP**
+FF0003H   FF0009H   000007H   BYTE   INSEG    CODE           ?PR?SWAP16?UART_CONTROLLER
+FF000AH   FF000AH   000001H   BYTE   INSEG    CODE           ?PR?TIMER0_ISR?TIMER
+FF000BH   FF000DH   000003H   ---    OFFS..   CODE           ?PR?IV?1
+FF000EH   FF0029H   00001CH   BYTE   INSEG    CODE           ?PR?TIMER3_INIT?TIMER
+FF002AH   FF002AH   000001H   ---    ---      **GAP**
 FF002BH   FF002DH   000003H   ---    OFFS..   CODE           ?PR?IV?5
-FF002EH   FF0049H   00001CH   BYTE   INSEG    CODE           ?PR?TIMER3_INIT?TIMER
-FF004AH   FF004AH   000001H   ---    ---      **GAP**
+FF002EH   FF0048H   00001BH   BYTE   INSEG    CODE           ?PR?MAIN?MAIN
+FF0049H   FF004AH   000002H   ---    ---      **GAP**
 FF004BH   FF004DH   000003H   ---    OFFS..   CODE           ?PR?IV?9
 FF004EH   FF015AH   00010DH   BYTE   INSEG    CODE           ?PR?PWM_READCAPTURE?PWM
 FF015BH   FF01B0H   000056H   BYTE   INSEG    CODE           ?PR?UART_DMA_SEND?UART
@@ -132,12 +135,12 @@ FF0F8BH   FF1064H   0000DAH   BYTE   INSEG    CODE           ?PR?CLK_INIT?CLOCK
 FF1065H   FF1134H   0000D0H   BYTE   INSEG    CODE           ?PR?RECEIVE_MESSAGES?UART_CONTROLLER
 FF1135H   FF11F5H   0000C1H   BYTE   INSEG    CODE           ?PR?HSPWM_UPDATEDUTY?PWM
 FF11F6H   FF1271H   00007CH   BYTE   INSEG    CODE           ?PR?SEND_MESSAGES?UART_CONTROLLER
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 3
+
+
 FF1272H   FF12DDH   00006CH   BYTE   INSEG    CODE           ?PR?DMA_UART3RX_ISR?UART
 FF12DEH   FF1337H   00005AH   BYTE   INSEG    CODE           ?PR?ADC_INIT?ADC
 FF1338H   FF1389H   000052H   BYTE   INSEG    CODE           ?PR?MEM_CRC8_CHECK?CRC8
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 3
-
-
 FF138AH   FF13D7H   00004EH   BYTE   INSEG    CODE           ?PR?UART_DMA_RECEIVE?UART
 FF13D8H   FF141EH   000047H   BYTE   INSEG    CODE           ?PR?PORT1_INIT?PORT
 FF141FH   FF145FH   000041H   BYTE   INSEG    CODE           ?PR?PORT0_INIT?PORT
@@ -147,33 +150,33 @@ FF14E2H   FF14F4H   000013H   BYTE   UNIT     CODE           ?C_C51STARTUP
 FF14F5H   FF151DH   000029H   BYTE   UNIT     CODE           ?C_C51STARTUP?2
 FF151EH   FF1520H   000003H   BYTE   UNIT     CODE           ?C_C51STARTUP?3
 FF1521H   FF155BH   00003BH   BYTE   INSEG    CODE           ?PR?PORT3_INIT?PORT
-FF155CH   FF1591H   000036H   BYTE   INSEG    CODE           ?PR?SPI_INIT?SPI
-FF1592H   FF15C4H   000033H   BYTE   INSEG    CODE           ?PR?SYS_INIT?MAIN
-FF15C5H   FF15F5H   000031H   BYTE   INSEG    CODE           ?PR?HSPWMA_READREG?PWM
-FF15F6H   FF1626H   000031H   BYTE   INSEG    CODE           ?PR?HSPWMB_READREG?PWM
-FF1627H   FF1655H   00002FH   BYTE   INSEG    CODE           ?PR?WRITE_RXD_BUFFER?UART
-FF1656H   FF1683H   00002EH   BYTE   INSEG    CODE           ?PR?_M?MAIN
-FF1684H   FF16B0H   00002DH   BYTE   INSEG    CODE           ?PR?DELAY_US?MAIN
-FF16B1H   FF16D5H   000025H   BYTE   INSEG    CODE           ?PR?HSPWMB_WRITEREG?PWM
-FF16D6H   FF16FAH   000025H   BYTE   INSEG    CODE           ?PR?MEMCPY?_?MEMCPY
-FF16FBH   FF171EH   000024H   BYTE   INSEG    CODE           ?PR?ADC_CONVERT?ADC
-FF171FH   FF173DH   00001FH   BYTE   INSEG    CODE           ?PR?DMA_UART3TX_ISR?UART
-FF173EH   FF1758H   00001BH   BYTE   INSEG    CODE           ?PR?MAIN?MAIN
-FF1759H   FF1772H   00001AH   BYTE   INSEG    CODE           ?PR?MEMSET?_?MEMSET
-FF1773H   FF1789H   000017H   BYTE   INSEG    CODE           ?PR?SWAP32?UART_CONTROLLER
-FF178AH   FF17A0H   000017H   BYTE   INSEG    CODE           ?PR?DELAY_MS?MAIN
-FF17A1H   FF17B4H   000014H   BYTE   INSEG    CODE           ?PR?SWAP_FLOAT?UART_CONTROLLER
-FF17B5H   FF17C4H   000010H   BYTE   INSEG    CODE           ?PR?PUTCHAR?UART
-FF17C5H   FF17D3H   00000FH   BYTE   INSEG    CODE           ?PR?SPI_ISR?SPI
-FF17D4H   FF17E1H   00000EH   BYTE   INSEG    CODE           ?PR?STRLEN?_?STRLEN
-FF17E2H   FF17ECH   00000BH   BYTE   INSEG    CODE           ?PR?SPI_READBYTE?SPI
-FF17EDH   FF17F5H   000009H   BYTE   INSEG    CODE           ?PR?SPI_WRITEBYTE?SPI
-FF17F6H   FF17FCH   000007H   BYTE   INSEG    CODE           ?PR?SWAP16?UART_CONTROLLER
-FF17FDH   FF1802H   000006H   BYTE   INSEG    CODE           ?PR?ADC_ISR?ADC
-FF1803H   FF1806H   000004H   BYTE   UNIT     CONST          ?CO?PRINTF
-FF1807H   FF1906H   000100H   BYTE   UNIT     HCONST         ?HC?CRC8
-FF1907H   FF195CH   000056H   BYTE   UNIT     HCONST         ?C_INITEDATA
-FF195DH   FF196DH   000011H   BYTE   UNIT     HCONST         ?HC?MAIN
+FF155CH   FF1596H   00003BH   BYTE   INSEG    CODE           ?PR?SPI_INIT?SPI
+FF1597H   FF15CCH   000036H   BYTE   INSEG    CODE           ?PR?SYS_INIT?MAIN
+FF15CDH   FF15FDH   000031H   BYTE   INSEG    CODE           ?PR?HSPWMA_READREG?PWM
+FF15FEH   FF162EH   000031H   BYTE   INSEG    CODE           ?PR?HSPWMB_READREG?PWM
+FF162FH   FF165DH   00002FH   BYTE   INSEG    CODE           ?PR?WRITE_RXD_BUFFER?UART
+FF165EH   FF168BH   00002EH   BYTE   INSEG    CODE           ?PR?_M?MAIN
+FF168CH   FF16B8H   00002DH   BYTE   INSEG    CODE           ?PR?DELAY_US?MAIN
+FF16B9H   FF16E0H   000028H   BYTE   INSEG    CODE           ?PR?TIMER0_INIT?TIMER
+FF16E1H   FF1705H   000025H   BYTE   INSEG    CODE           ?PR?HSPWMA_WRITEREG?PWM
+FF1706H   FF172AH   000025H   BYTE   INSEG    CODE           ?PR?HSPWMB_WRITEREG?PWM
+FF172BH   FF174FH   000025H   BYTE   INSEG    CODE           ?PR?MEMCPY?_?MEMCPY
+FF1750H   FF1773H   000024H   BYTE   INSEG    CODE           ?PR?ADC_CONVERT?ADC
+FF1774H   FF1792H   00001FH   BYTE   INSEG    CODE           ?PR?DMA_UART3TX_ISR?UART
+FF1793H   FF17ACH   00001AH   BYTE   INSEG    CODE           ?PR?MEMSET?_?MEMSET
+FF17ADH   FF17C3H   000017H   BYTE   INSEG    CODE           ?PR?SWAP32?UART_CONTROLLER
+FF17C4H   FF17DAH   000017H   BYTE   INSEG    CODE           ?PR?DELAY_MS?MAIN
+FF17DBH   FF17EEH   000014H   BYTE   INSEG    CODE           ?PR?SWAP_FLOAT?UART_CONTROLLER
+FF17EFH   FF17FEH   000010H   BYTE   INSEG    CODE           ?PR?PUTCHAR?UART
+FF17FFH   FF180DH   00000FH   BYTE   INSEG    CODE           ?PR?SPI_ISR?SPI
+FF180EH   FF181BH   00000EH   BYTE   INSEG    CODE           ?PR?STRLEN?_?STRLEN
+FF181CH   FF1826H   00000BH   BYTE   INSEG    CODE           ?PR?SPI_READBYTE?SPI
+FF1827H   FF182FH   000009H   BYTE   INSEG    CODE           ?PR?SPI_WRITEBYTE?SPI
+FF1830H   FF1835H   000006H   BYTE   INSEG    CODE           ?PR?ADC_ISR?ADC
+FF1836H   FF1839H   000004H   BYTE   UNIT     CONST          ?CO?PRINTF
+FF183AH   FF1939H   000100H   BYTE   UNIT     HCONST         ?HC?CRC8
+FF193AH   FF198FH   000056H   BYTE   UNIT     HCONST         ?C_INITEDATA
+FF1990H   FF19A0H   000011H   BYTE   UNIT     HCONST         ?HC?MAIN
 
 
 
@@ -197,23 +200,23 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0919H   CODE     ---       ?C?FPUNDERFLOW
       00FF08A0H   CODE     ---       ?C?FTNPWR
       00FF14F5H   CODE     ---       ?C?INITEDATA
-      00FF195BH   HCONST   WORD      ?C?INITEDATA_END
+      00FF198EH   HCONST   WORD      ?C?INITEDATA_END
       00FF0237H   CODE     ---       ?C?PRNFMT
       00FF0928H   CODE     ---       ?C?SIDIV
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 4
+
+
       00FF0000H   CODE     ---       ?C?STARTUP
       00000001H   NUMBER   ---       ?C?XDATASEG
       00FF0000H   CODE     ---       ?C_STARTUP
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 4
-
-
       000000E3H   EDATA    ---       ?printf?BYTE
       0000010BH   EDATA    ---       ?sprintf?BYTE
-      00FF1656H   CODE     ---       _m
+      00FF165EH   CODE     ---       _m
 *SFR* 000000E0H   DATA     BYTE      ACC
 *SFR* 000000BCH   DATA     BYTE      ADC_CONTR
-      00FF16FBH   CODE     ---       ADC_Convert
+      00FF1750H   CODE     ---       ADC_Convert
       00FF12DEH   CODE     ---       ADC_Init
-      00FF17FDH   CODE     ---       ADC_ISR
+      00FF1830H   CODE     ---       ADC_ISR
 *SFR* 000000BDH   DATA     BYTE      ADC_RES
 *SFR* 000000BEH   DATA     BYTE      ADC_RESL
 *SFR* 000000DEH   DATA     BYTE      ADCCFG
@@ -226,21 +229,22 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
       000000A9H   EDATA    ---       cmdframe
 *SFR* 000000E6H   DATA     BYTE      CMPCR1
 *SFR* 000000E7H   DATA     BYTE      CMPCR2
-      00FF178AH   CODE     ---       delay_ms
-      00FF1684H   CODE     ---       delay_us
+      00FF17C4H   CODE     ---       delay_ms
+      00FF168CH   CODE     ---       delay_us
       00FF1272H   CODE     ---       DMA_UART3RX_ISR
-      00FF171FH   CODE     ---       DMA_UART3TX_ISR
+      00FF1774H   CODE     ---       DMA_UART3TX_ISR
 *SFR* 000000EDH   DATA     BYTE      DMAIR
 *SFR* 000000A8H.7 DATA     BIT       EA
 *SFR* 000000A8H.5 DATA     BIT       EADC
+*SFR* 000000A8H.1 DATA     BIT       ET0
       00000020H.0 BIT      BIT       fADCConverted
       00000020H.1 BIT      BIT       fSPITransBusy
       00FF0EABH   CODE     ---       HSPWM_ReadCapture
       00FF1135H   CODE     ---       HSPWM_UpdateDuty
-      00FF15C5H   CODE     ---       HSPWMA_ReadReg
-      00FF0003H   CODE     ---       HSPWMA_WriteReg
-      00FF15F6H   CODE     ---       HSPWMB_ReadReg
-      00FF16B1H   CODE     ---       HSPWMB_WriteReg
+      00FF15CDH   CODE     ---       HSPWMA_ReadReg
+      00FF16E1H   CODE     ---       HSPWMA_WriteReg
+      00FF15FEH   CODE     ---       HSPWMB_ReadReg
+      00FF1706H   CODE     ---       HSPWMB_WriteReg
 *SFR* 000000C7H   DATA     BYTE      IAP_CONTR
 *SFR* 000000F5H   DATA     BYTE      IAP_TPS
 *SFR* 000000A8H   DATA     BYTE      IE
@@ -254,11 +258,11 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
 *SFR* 000000B7H   DATA     BYTE      IPH
 *SFR* 0000009DH   DATA     BYTE      IRCBAND
 *SFR* 0000009FH   DATA     BYTE      IRTRIM
-      00FF173EH   CODE     ---       main
+      00FF002EH   CODE     ---       main
       00FF01B6H   CODE     ---       MATHLIB_Init
       00FF1338H   CODE     ---       Mem_CRC8_Check
-      00FF16D6H   CODE     ---       memcpy?_
-      00FF1759H   CODE     ---       memset?_
+      00FF172BH   CODE     ---       memcpy?_
+      00FF1793H   CODE     ---       memset?_
 *SFR* 00000080H   DATA     BYTE      P0
 *SFR* 00000094H   DATA     BYTE      P0M0
 *SFR* 00000093H   DATA     BYTE      P0M1
@@ -267,13 +271,13 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
 *SFR* 00000091H   DATA     BYTE      P1M1
 *SFR* 000000A0H   DATA     BYTE      P2
 *SFR* 00000096H   DATA     BYTE      P2M0
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 5
+
+
 *SFR* 00000095H   DATA     BYTE      P2M1
 *SFR* 000000B0H   DATA     BYTE      P3
 *SFR* 000000B2H   DATA     BYTE      P3M0
 *SFR* 000000B1H   DATA     BYTE      P3M1
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 5
-
-
 *SFR* 000000C0H   DATA     BYTE      P4
 *SFR* 000000C8H   DATA     BYTE      P5
 *SFR* 000000CAH   DATA     BYTE      P5M0
@@ -294,9 +298,10 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF01BEH   CODE     NEAR LAB  printf
 *SFR* 000000D0H   DATA     BYTE      PSW
 *SFR* 000000D1H   DATA     BYTE      PSW1
+*SFR* 000000B8H.1 DATA     BIT       PT0
       00010000H   XDATA    ---       pu8UR3DMARxBuffer
       00010012H   XDATA    ---       pu8UR3DMATxBuffer
-      00FF17B5H   CODE     ---       putchar
+      00FF17EFH   CODE     ---       putchar
       00FF004EH   CODE     ---       PWM_ReadCapture
       00FF0DB0H   CODE     ---       PWM_UpdateDuty
       00FF0981H   CODE     ---       PWMA_Init
@@ -315,22 +320,30 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
 *SFR* 000000CEH   DATA     BYTE      SPCTL
 *SFR* 000000CFH   DATA     BYTE      SPDAT
       00FF155CH   CODE     ---       SPI_Init
-      00FF17C5H   CODE     ---       SPI_ISR
-      00FF17E2H   CODE     ---       SPI_ReadByte
-      00FF17EDH   CODE     ---       SPI_WriteByte
+      00FF17FFH   CODE     ---       SPI_ISR
+      00FF181CH   CODE     ---       SPI_ReadByte
+      00FF1827H   CODE     ---       SPI_WriteByte
       00FF01EAH   CODE     NEAR LAB  sprintf
 *SFR* 000000CDH   DATA     BYTE      SPSTAT
-      00FF17D4H   CODE     ---       strlen?_
-      00FF17F6H   CODE     ---       swap16
-      00FF1773H   CODE     ---       swap32
-      00FF17A1H   CODE     ---       swap_float
-      00FF1592H   CODE     ---       SYS_Init
+      00FF180EH   CODE     ---       strlen?_
+      00FF0003H   CODE     ---       swap16
+      00FF17ADH   CODE     ---       swap32
+      00FF17DBH   CODE     ---       swap_float
+      00FF1597H   CODE     ---       SYS_Init
 *SFR* 000000D4H   DATA     BYTE      T3H
 *SFR* 000000D5H   DATA     BYTE      T3L
 *SFR* 000000DDH   DATA     BYTE      T4T3M
 *SFR* 00000088H   DATA     BYTE      TCON
-      00FF002EH   CODE     ---       TIMER3_Init
+*SFR* 0000008CH   DATA     BYTE      TH0
+      00FF16B9H   CODE     ---       TIMER0_Init
+      00FF000AH   CODE     ---       TIMER0_ISR
+      00FF000EH   CODE     ---       TIMER3_Init
+*SFR* 0000008AH   DATA     BYTE      TL0
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 6
+
+
 *SFR* 00000089H   DATA     BYTE      TMOD
+*SFR* 00000088H.4 DATA     BIT       TR0
       00FF0CB2H   CODE     ---       UART3_Init
       00FF138AH   CODE     ---       UART_DMA_Receive
       00FF015BH   CODE     ---       UART_DMA_Send
@@ -339,10 +352,7 @@ PUBLIC SYMBOLS OF MODULE:  .\Objects\FocController_STC (crc8)
 *SFR* 000000A6H   DATA     BYTE      VRTRIM
 *SFR* 000000C1H   DATA     BYTE      WDT_CONTR
       00000022H   EDATA    BYTE      write_ptr
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 6
-
-
-      00FF1627H   CODE     ---       Write_RXD_Buffer
+      00FF162FH   CODE     ---       Write_RXD_Buffer
 *SFR* 000000E9H   DATA     BYTE      WTST
 
 
@@ -353,7 +363,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       ====================================================
       ---         MODULE    ---      ---       crc8
       00FF1338H   PUBLIC    CODE     ---       Mem_CRC8_Check
-      00FF1807H   SYMBOL    HCONST   ---       CRC8_TAB
+      00FF183AH   SYMBOL    HCONST   ---       CRC8_TAB
 
       00FF1338H   BLOCK     CODE     ---       LVL=0
       REG=0       REGSYM    ---      ---       dat
@@ -385,10 +395,10 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       uart_controller
-      00FF1773H   PUBLIC    CODE     ---       swap32
-      00FF17F6H   PUBLIC    CODE     ---       swap16
+      00FF17ADH   PUBLIC    CODE     ---       swap32
+      00FF0003H   PUBLIC    CODE     ---       swap16
       00FF1065H   PUBLIC    CODE     ---       receive_messages
-      00FF17A1H   PUBLIC    CODE     ---       swap_float
+      00FF17DBH   PUBLIC    CODE     ---       swap_float
       00FF11F6H   PUBLIC    CODE     ---       send_messages
       0000007DH   PUBLIC    EDATA    ---       replyframe_to_send
       00000093H   PUBLIC    EDATA    ---       replyframe
@@ -397,6 +407,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       0000009DH   SFRSYM    DATA     BYTE      IRCBAND
       00000097H   SFRSYM    DATA     BYTE      AUXR2
       000000EFH   SFRSYM    DATA     BYTE      AUXINTIF
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 7
+
+
       000000FDH   SFRSYM    DATA     BYTE      S4CON
       000000ACH   SFRSYM    DATA     BYTE      S3CON
       0000009AH   SFRSYM    DATA     BYTE      S2CON
@@ -407,9 +420,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000DFH   SFRSYM    DATA     BYTE      IP3
       000000F4H   SFRSYM    DATA     BYTE      USBCON
       000000B5H   SFRSYM    DATA     BYTE      IP2
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 7
-
-
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
       000000E0H   SFRSYM    DATA     BYTE      ACC
       000000C7H   SFRSYM    DATA     BYTE      IAP_CONTR
@@ -444,40 +454,40 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000090H   SFRSYM    DATA     BYTE      P1
       00000080H   SFRSYM    DATA     BYTE      P0
 
-      00FF1773H   BLOCK     CODE     ---       LVL=0
+      00FF17ADH   BLOCK     CODE     ---       LVL=0
       DR8         REGSYM    ---      DWORD     x
-      00FF1773H   LINE      CODE     ---       #7
-      00FF1775H   LINE      CODE     ---       #9
-      00FF1789H   LINE      CODE     ---       #13
+      00FF17ADH   LINE      CODE     ---       #7
+      00FF17AFH   LINE      CODE     ---       #9
+      00FF17C3H   LINE      CODE     ---       #13
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17A1H   BLOCK     CODE     ---       LVL=0
+      00FF17DBH   BLOCK     CODE     ---       LVL=0
       DR0         REGSYM    ---      FLOAT     x
       0000001AH   SYMBOL    EDATA    ---       tmp
-      00FF17A1H   LINE      CODE     ---       #16
-      00FF17A1H   LINE      CODE     ---       #17
-      00FF17A1H   LINE      CODE     ---       #22
-      00FF17A5H   LINE      CODE     ---       #23
-      00FF17B0H   LINE      CODE     ---       #24
-      00FF17B4H   LINE      CODE     ---       #25
+      00FF17DBH   LINE      CODE     ---       #16
+      00FF17DBH   LINE      CODE     ---       #17
+      00FF17DBH   LINE      CODE     ---       #22
+      00FF17DFH   LINE      CODE     ---       #23
+      00FF17EAH   LINE      CODE     ---       #24
+      00FF17EEH   LINE      CODE     ---       #25
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17F6H   BLOCK     CODE     ---       LVL=0
+      00FF0003H   BLOCK     CODE     ---       LVL=0
       WR4         REGSYM    ---      WORD      x
-      00FF17F8H   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF0005H   BLOCK     CODE     NEAR LAB  LVL=1
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 8
+
+
       R7          REGSYM    ---      BYTE      high_byte
       R6          REGSYM    ---      BYTE      low_byte
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF17F6H   LINE      CODE     ---       #27
-      00FF17F8H   LINE      CODE     ---       #28
-      00FF17F8H   LINE      CODE     ---       #30
-      00FF17FAH   LINE      CODE     ---       #31
-      00FF17FCH   LINE      CODE     ---       #32
-      00FF17FCH   LINE      CODE     ---       #33
+      00FF0003H   LINE      CODE     ---       #27
+      00FF0005H   LINE      CODE     ---       #28
+      00FF0005H   LINE      CODE     ---       #30
+      00FF0007H   LINE      CODE     ---       #31
+      00FF0009H   LINE      CODE     ---       #32
+      00FF0009H   LINE      CODE     ---       #33
       ---         BLOCKEND  ---      ---       LVL=0
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 8
-
-
 
       00FF11F6H   BLOCK     CODE     ---       LVL=0
       REG=3       REGSYM    ---      ---       frame
@@ -524,15 +534,18 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       main
-      00FF173EH   PUBLIC    CODE     ---       main
-      00FF1656H   PUBLIC    CODE     ---       _m
-      00FF178AH   PUBLIC    CODE     ---       delay_ms
-      00FF1684H   PUBLIC    CODE     ---       delay_us
-      00FF1592H   PUBLIC    CODE     ---       SYS_Init
+      00FF002EH   PUBLIC    CODE     ---       main
+      00FF165EH   PUBLIC    CODE     ---       _m
+      00FF17C4H   PUBLIC    CODE     ---       delay_ms
+      00FF168CH   PUBLIC    CODE     ---       delay_us
+      00FF1597H   PUBLIC    CODE     ---       SYS_Init
       000000D0H   SFRSYM    DATA     BYTE      PSW
       0000009DH   SFRSYM    DATA     BYTE      IRCBAND
       00000097H   SFRSYM    DATA     BYTE      AUXR2
       000000EAH   SFRSYM    DATA     BYTE      CKCON
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 9
+
+
       000000EFH   SFRSYM    DATA     BYTE      AUXINTIF
       000000FDH   SFRSYM    DATA     BYTE      S4CON
       000000ACH   SFRSYM    DATA     BYTE      S3CON
@@ -543,9 +556,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000C1H   SFRSYM    DATA     BYTE      WDT_CONTR
       000000E9H   SFRSYM    DATA     BYTE      WTST
       000000DFH   SFRSYM    DATA     BYTE      IP3
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 9
-
-
       000000F4H   SFRSYM    DATA     BYTE      USBCON
       000000B5H   SFRSYM    DATA     BYTE      IP2
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
@@ -584,67 +594,68 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000090H   SFRSYM    DATA     BYTE      P1
       00000080H   SFRSYM    DATA     BYTE      P0
 
-      00FF173EH   BLOCK     CODE     ---       LVL=0
-      00FF173EH   LINE      CODE     ---       #32
+      00FF002EH   BLOCK     CODE     ---       LVL=0
+      00FF002EH   LINE      CODE     ---       #32
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF1656H   BLOCK     CODE     ---       LVL=0
-      00FF1656H   LINE      CODE     ---       #32
-      00FF1656H   LINE      CODE     ---       #38
-      00FF1659H   LINE      CODE     ---       #42
-      00FF1669H   LINE      CODE     ---       #43
-      00FF1674H   LINE      CODE     ---       #46
-      00FF1674H   LINE      CODE     ---       #49
-      00FF167BH   LINE      CODE     ---       #50
-      00FF1682H   LINE      CODE     ---       #52
+      00FF165EH   BLOCK     CODE     ---       LVL=0
+      00FF165EH   LINE      CODE     ---       #32
+      00FF165EH   LINE      CODE     ---       #38
+      00FF1661H   LINE      CODE     ---       #42
+      00FF1671H   LINE      CODE     ---       #43
+      00FF167CH   LINE      CODE     ---       #46
+      00FF167CH   LINE      CODE     ---       #49
+      00FF1683H   LINE      CODE     ---       #50
+      00FF168AH   LINE      CODE     ---       #52
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF1592H   BLOCK     CODE     ---       LVL=0
-      00FF1592H   LINE      CODE     ---       #60
-      00FF1592H   LINE      CODE     ---       #62
-      00FF1595H   LINE      CODE     ---       #63
-      00FF1598H   LINE      CODE     ---       #64
-      00FF159BH   LINE      CODE     ---       #65
-      00FF159EH   LINE      CODE     ---       #71
-      00FF15A1H   LINE      CODE     ---       #72
-      00FF15A4H   LINE      CODE     ---       #73
-      00FF15A7H   LINE      CODE     ---       #74
-      00FF15AAH   LINE      CODE     ---       #75
-      00FF15ADH   LINE      CODE     ---       #76
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 10
+      00FF1597H   BLOCK     CODE     ---       LVL=0
+      00FF1597H   LINE      CODE     ---       #60
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 10
 
 
-      00FF15B0H   LINE      CODE     ---       #77
-      00FF15B3H   LINE      CODE     ---       #78
-      00FF15B6H   LINE      CODE     ---       #79
-      00FF15B9H   LINE      CODE     ---       #80
-      00FF15BCH   LINE      CODE     ---       #81
-      00FF15BFH   LINE      CODE     ---       #82
-      00FF15C2H   LINE      CODE     ---       #88
-      00FF15C4H   LINE      CODE     ---       #89
+      00FF1597H   LINE      CODE     ---       #62
+      00FF159AH   LINE      CODE     ---       #63
+      00FF159DH   LINE      CODE     ---       #64
+      00FF15A0H   LINE      CODE     ---       #65
+      00FF15A3H   LINE      CODE     ---       #71
+      00FF15A6H   LINE      CODE     ---       #72
+      00FF15A9H   LINE      CODE     ---       #73
+      00FF15ACH   LINE      CODE     ---       #74
+      00FF15AFH   LINE      CODE     ---       #75
+      00FF15B2H   LINE      CODE     ---       #76
+      00FF15B5H   LINE      CODE     ---       #77
+      00FF15B8H   LINE      CODE     ---       #78
+      00FF15BBH   LINE      CODE     ---       #79
+      00FF15BEH   LINE      CODE     ---       #80
+      00FF15C1H   LINE      CODE     ---       #81
+      00FF15C4H   LINE      CODE     ---       #82
+      00FF15C7H   LINE      CODE     ---       #83
+      00FF15CAH   LINE      CODE     ---       #89
+      00FF15CCH   LINE      CODE     ---       #90
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF1684H   BLOCK     CODE     ---       LVL=0
+      00FF168CH   BLOCK     CODE     ---       LVL=0
       WR4         REGSYM    ---      WORD      us
-      00FF1684H   LINE      CODE     ---       #96
-      00FF1686H   LINE      CODE     ---       #98
-      00FF1686H   LINE      CODE     ---       #100
-      00FF16A8H   LINE      CODE     ---       #101
+      00FF168CH   LINE      CODE     ---       #97
+      00FF168EH   LINE      CODE     ---       #99
+      00FF168EH   LINE      CODE     ---       #101
       00FF16B0H   LINE      CODE     ---       #102
+      00FF16B8H   LINE      CODE     ---       #103
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF178AH   BLOCK     CODE     ---       LVL=0
+      00FF17C4H   BLOCK     CODE     ---       LVL=0
       WR4         REGSYM    ---      WORD      ms
-      00FF178CH   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF17C6H   BLOCK     CODE     NEAR LAB  LVL=1
       WR6         REGSYM    ---      WORD      i
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF178AH   LINE      CODE     ---       #110
-      00FF178CH   LINE      CODE     ---       #111
-      00FF178CH   LINE      CODE     ---       #114
-      00FF178CH   LINE      CODE     ---       #116
-      00FF1790H   LINE      CODE     ---       #117
-      00FF1798H   LINE      CODE     ---       #118
-      00FF17A0H   LINE      CODE     ---       #119
+      00FF17C4H   LINE      CODE     ---       #111
+      00FF17C6H   LINE      CODE     ---       #112
+      00FF17C6H   LINE      CODE     ---       #115
+      00FF17C6H   LINE      CODE     ---       #117
+      00FF17CAH   LINE      CODE     ---       #118
+      00FF17D2H   LINE      CODE     ---       #119
+      00FF17DAH   LINE      CODE     ---       #120
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       port
@@ -668,6 +679,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000DFH   SFRSYM    DATA     BYTE      IP3
       000000F4H   SFRSYM    DATA     BYTE      USBCON
       000000B5H   SFRSYM    DATA     BYTE      IP2
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 11
+
+
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
       000000E0H   SFRSYM    DATA     BYTE      ACC
       000000C7H   SFRSYM    DATA     BYTE      IAP_CONTR
@@ -679,9 +693,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000098H   SFRSYM    DATA     BYTE      SCON
       00000087H   SFRSYM    DATA     BYTE      PCON
       000000BCH   SFRSYM    DATA     BYTE      ADC_CONTR
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 11
-
-
       000000D1H   SFRSYM    DATA     BYTE      PSW1
       000000E7H   SFRSYM    DATA     BYTE      CMPCR2
       000000E6H   SFRSYM    DATA     BYTE      CMPCR1
@@ -736,6 +747,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF13E7H   LINE      CODE     ---       #60
       00FF13EDH   LINE      CODE     ---       #62
       00FF13F9H   LINE      CODE     ---       #63
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 12
+
+
       00FF1400H   LINE      CODE     ---       #64
       00FF1409H   LINE      CODE     ---       #65
       00FF1410H   LINE      CODE     ---       #66
@@ -747,9 +761,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF1460H   LINE      CODE     ---       #79
       00FF1460H   LINE      CODE     ---       #81
       00FF1463H   LINE      CODE     ---       #82
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 12
-
-
       00FF1469H   LINE      CODE     ---       #83
       00FF146FH   LINE      CODE     ---       #85
       00FF147BH   LINE      CODE     ---       #86
@@ -804,6 +815,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000C1H   SFRSYM    DATA     BYTE      WDT_CONTR
       000000DFH   SFRSYM    DATA     BYTE      IP3
       000000F4H   SFRSYM    DATA     BYTE      USBCON
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 13
+
+
       000000B5H   SFRSYM    DATA     BYTE      IP2
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
       000000E0H   SFRSYM    DATA     BYTE      ACC
@@ -815,9 +829,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000088H   SFRSYM    DATA     BYTE      TCON
       00000089H   SFRSYM    DATA     BYTE      TMOD
       00000098H   SFRSYM    DATA     BYTE      SCON
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 13
-
-
       00000087H   SFRSYM    DATA     BYTE      PCON
       000000BCH   SFRSYM    DATA     BYTE      ADC_CONTR
       000000D1H   SFRSYM    DATA     BYTE      PSW1
@@ -866,10 +877,15 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       timer
-      00FF002EH   PUBLIC    CODE     ---       TIMER3_Init
+      00FF000AH   PUBLIC    CODE     ---       TIMER0_ISR
+      00FF16B9H   PUBLIC    CODE     ---       TIMER0_Init
+      00FF000EH   PUBLIC    CODE     ---       TIMER3_Init
       000000D0H   SFRSYM    DATA     BYTE      PSW
       0000009DH   SFRSYM    DATA     BYTE      IRCBAND
       00000097H   SFRSYM    DATA     BYTE      AUXR2
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 14
+
+
       000000EFH   SFRSYM    DATA     BYTE      AUXINTIF
       000000FDH   SFRSYM    DATA     BYTE      S4CON
       000000ACH   SFRSYM    DATA     BYTE      S3CON
@@ -878,15 +894,17 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000CDH   SFRSYM    DATA     BYTE      SPSTAT
       000000DDH   SFRSYM    DATA     BYTE      T4T3M
       000000C1H   SFRSYM    DATA     BYTE      WDT_CONTR
+      00000088H.4 SFRSYM    DATA     BIT       TR0
+      000000B8H.1 SFRSYM    DATA     BIT       PT0
       000000D5H   SFRSYM    DATA     BYTE      T3L
+      0000008AH   SFRSYM    DATA     BYTE      TL0
       000000D4H   SFRSYM    DATA     BYTE      T3H
+      0000008CH   SFRSYM    DATA     BYTE      TH0
       000000DFH   SFRSYM    DATA     BYTE      IP3
       000000F4H   SFRSYM    DATA     BYTE      USBCON
       000000B5H   SFRSYM    DATA     BYTE      IP2
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 14
-
-
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
+      000000A8H.1 SFRSYM    DATA     BIT       ET0
       000000E0H   SFRSYM    DATA     BYTE      ACC
       000000C7H   SFRSYM    DATA     BYTE      IAP_CONTR
       0000008EH   SFRSYM    DATA     BYTE      AUXR
@@ -920,24 +938,46 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000090H   SFRSYM    DATA     BYTE      P1
       00000080H   SFRSYM    DATA     BYTE      P0
 
-      00FF002EH   BLOCK     CODE     ---       LVL=0
-      00FF002EH   LINE      CODE     ---       #32
-      00FF002EH   LINE      CODE     ---       #41
-      00FF0031H   LINE      CODE     ---       #42
-      00FF0034H   LINE      CODE     ---       #43
-      00FF0040H   LINE      CODE     ---       #44
-      00FF0046H   LINE      CODE     ---       #45
-      00FF0049H   LINE      CODE     ---       #50
+      00FF16B9H   BLOCK     CODE     ---       LVL=0
+      00FF16B9H   LINE      CODE     ---       #32
+      00FF16B9H   LINE      CODE     ---       #37
+      00FF16BCH   LINE      CODE     ---       #38
+      00FF16BFH   LINE      CODE     ---       #39
+      00FF16C2H   LINE      CODE     ---       #40
+      00FF16C5H   LINE      CODE     ---       #41
+      00FF16CAH   LINE      CODE     ---       #42
+      00FF16CCH   LINE      CODE     ---       #43
+      00FF16D8H   LINE      CODE     ---       #44
+      00FF16DEH   LINE      CODE     ---       #45
+      00FF16E0H   LINE      CODE     ---       #50
+      ---         BLOCKEND  ---      ---       LVL=0
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 15
+
+
+
+      00FF000EH   BLOCK     CODE     ---       LVL=0
+      00FF000EH   LINE      CODE     ---       #57
+      00FF000EH   LINE      CODE     ---       #66
+      00FF0011H   LINE      CODE     ---       #67
+      00FF0014H   LINE      CODE     ---       #68
+      00FF0020H   LINE      CODE     ---       #69
+      00FF0026H   LINE      CODE     ---       #70
+      00FF0029H   LINE      CODE     ---       #75
+      ---         BLOCKEND  ---      ---       LVL=0
+
+      00FF000AH   BLOCK     CODE     ---       LVL=0
+      00FF000AH   LINE      CODE     ---       #83
+      00FF000AH   LINE      CODE     ---       #88
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       uart
       00FF138AH   PUBLIC    CODE     ---       UART_DMA_Receive
-      00FF1627H   PUBLIC    CODE     ---       Write_RXD_Buffer
+      00FF162FH   PUBLIC    CODE     ---       Write_RXD_Buffer
       00FF1272H   PUBLIC    CODE     ---       DMA_UART3RX_ISR
-      00FF171FH   PUBLIC    CODE     ---       DMA_UART3TX_ISR
+      00FF1774H   PUBLIC    CODE     ---       DMA_UART3TX_ISR
       00FF015BH   PUBLIC    CODE     ---       UART_DMA_Send
       00FF0CB2H   PUBLIC    CODE     ---       UART3_Init
-      00FF17B5H   PUBLIC    CODE     ---       putchar
+      00FF17EFH   PUBLIC    CODE     ---       putchar
       00000021H   PUBLIC    EDATA    BYTE      read_ptr
       00000022H   PUBLIC    EDATA    BYTE      write_ptr
       00000023H   PUBLIC    EDATA    ---       rxd_buf
@@ -951,9 +991,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000ACH   SFRSYM    DATA     BYTE      S3CON
       0000009AH   SFRSYM    DATA     BYTE      S2CON
       000000ADH   SFRSYM    DATA     BYTE      S3BUF
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 15
-
-
       000000B7H   SFRSYM    DATA     BYTE      IPH
       000000CDH   SFRSYM    DATA     BYTE      SPSTAT
       000000DDH   SFRSYM    DATA     BYTE      T4T3M
@@ -982,6 +1019,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000B6H   SFRSYM    DATA     BYTE      IP2H
       000000BFH   SFRSYM    DATA     BYTE      P_SW4
       000000A8H   SFRSYM    DATA     BYTE      IE
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 16
+
+
       000000BBH   SFRSYM    DATA     BYTE      P_SW3
       000000BAH   SFRSYM    DATA     BYTE      P_SW2
       000000A2H   SFRSYM    DATA     BYTE      P_SW1
@@ -1019,27 +1059,24 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0D9AH   LINE      CODE     ---       #62
       00FF0DA2H   LINE      CODE     ---       #63
       00FF0DAAH   LINE      CODE     ---       #66
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 16
-
-
       00FF0DADH   LINE      CODE     ---       #71
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17B5H   BLOCK     CODE     ---       LVL=0
+      00FF17EFH   BLOCK     CODE     ---       LVL=0
       R10         REGSYM    ---      CHAR      dat
-      00FF17B5H   LINE      CODE     ---       #78
-      00FF17B7H   LINE      CODE     ---       #80
-      00FF17BCH   LINE      CODE     ---       #81
-      00FF17BFH   LINE      CODE     ---       #82
-      00FF17C2H   LINE      CODE     ---       #84
-      00FF17C4H   LINE      CODE     ---       #85
+      00FF17EFH   LINE      CODE     ---       #78
+      00FF17F1H   LINE      CODE     ---       #80
+      00FF17F6H   LINE      CODE     ---       #81
+      00FF17F9H   LINE      CODE     ---       #82
+      00FF17FCH   LINE      CODE     ---       #84
+      00FF17FEH   LINE      CODE     ---       #85
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF171FH   BLOCK     CODE     ---       LVL=0
-      00FF171FH   LINE      CODE     ---       #93
-      00FF1723H   LINE      CODE     ---       #97
-      00FF1731H   LINE      CODE     ---       #99
-      00FF1739H   LINE      CODE     ---       #100
+      00FF1774H   BLOCK     CODE     ---       LVL=0
+      00FF1774H   LINE      CODE     ---       #93
+      00FF1778H   LINE      CODE     ---       #97
+      00FF1786H   LINE      CODE     ---       #99
+      00FF178EH   LINE      CODE     ---       #100
       ---         BLOCKEND  ---      ---       LVL=0
 
       00FF1272H   BLOCK     CODE     ---       LVL=0
@@ -1050,22 +1087,25 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF129CH   LINE      CODE     ---       #116
       00FF12A9H   LINE      CODE     ---       #117
       00FF12B9H   LINE      CODE     ---       #118
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 17
+
+
       00FF12C9H   LINE      CODE     ---       #120
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF1627H   BLOCK     CODE     ---       LVL=0
+      00FF162FH   BLOCK     CODE     ---       LVL=0
       REG=7       REGSYM    ---      ---       dat
       R10         REGSYM    ---      BYTE      len
-      00FF162BH   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF1633H   BLOCK     CODE     NEAR LAB  LVL=1
       R3          REGSYM    ---      BYTE      i
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF1627H   LINE      CODE     ---       #124
-      00FF162BH   LINE      CODE     ---       #125
-      00FF162BH   LINE      CODE     ---       #127
-      00FF162FH   LINE      CODE     ---       #129
-      00FF1642H   LINE      CODE     ---       #130
-      00FF164FH   LINE      CODE     ---       #131
-      00FF1655H   LINE      CODE     ---       #132
+      00FF162FH   LINE      CODE     ---       #124
+      00FF1633H   LINE      CODE     ---       #125
+      00FF1633H   LINE      CODE     ---       #127
+      00FF1637H   LINE      CODE     ---       #129
+      00FF164AH   LINE      CODE     ---       #130
+      00FF1657H   LINE      CODE     ---       #131
+      00FF165DH   LINE      CODE     ---       #132
       ---         BLOCKEND  ---      ---       LVL=0
 
       00FF015BH   BLOCK     CODE     ---       LVL=0
@@ -1087,17 +1127,14 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF138EH   LINE      CODE     ---       #149
       00FF1396H   LINE      CODE     ---       #150
       00FF13A4H   LINE      CODE     ---       #153
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 17
-
-
       00FF13B7H   LINE      CODE     ---       #154
       00FF13C7H   LINE      CODE     ---       #155
       00FF13D7H   LINE      CODE     ---       #156
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       adc
-      00FF16FBH   PUBLIC    CODE     ---       ADC_Convert
-      00FF17FDH   PUBLIC    CODE     ---       ADC_ISR
+      00FF1750H   PUBLIC    CODE     ---       ADC_Convert
+      00FF1830H   PUBLIC    CODE     ---       ADC_ISR
       00FF12DEH   PUBLIC    CODE     ---       ADC_Init
       00000020H.0 PUBLIC    BIT      BIT       fADCConverted
       000000D0H   SFRSYM    DATA     BYTE      PSW
@@ -1118,6 +1155,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
       000000E0H   SFRSYM    DATA     BYTE      ACC
       000000C7H   SFRSYM    DATA     BYTE      IAP_CONTR
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 18
+
+
       0000008EH   SFRSYM    DATA     BYTE      AUXR
       000000F0H   SFRSYM    DATA     BYTE      B
       000000AFH   SFRSYM    DATA     BYTE      IE2
@@ -1155,9 +1195,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF12DEH   BLOCK     CODE     ---       LVL=0
       00FF12DEH   LINE      CODE     ---       #33
       00FF12DEH   LINE      CODE     ---       #35
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 18
-
-
       00FF12E1H   LINE      CODE     ---       #36
       00FF12E4H   LINE      CODE     ---       #37
       00FF12E7H   LINE      CODE     ---       #38
@@ -1173,34 +1210,37 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF1337H   LINE      CODE     ---       #56
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF16FBH   BLOCK     CODE     ---       LVL=0
+      00FF1750H   BLOCK     CODE     ---       LVL=0
       R7          REGSYM    ---      BYTE      ch
-      00FF16FDH   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF1752H   BLOCK     CODE     NEAR LAB  LVL=1
       WR6         REGSYM    ---      WORD      res
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF16FBH   LINE      CODE     ---       #63
-      00FF16FDH   LINE      CODE     ---       #64
-      00FF16FDH   LINE      CODE     ---       #67
-      00FF170AH   LINE      CODE     ---       #68
-      00FF170DH   LINE      CODE     ---       #69
-      00FF1710H   LINE      CODE     ---       #70
-      00FF1712H   LINE      CODE     ---       #71
-      00FF171EH   LINE      CODE     ---       #73
-      00FF171EH   LINE      CODE     ---       #74
+      00FF1750H   LINE      CODE     ---       #63
+      00FF1752H   LINE      CODE     ---       #64
+      00FF1752H   LINE      CODE     ---       #67
+      00FF175FH   LINE      CODE     ---       #68
+      00FF1762H   LINE      CODE     ---       #69
+      00FF1765H   LINE      CODE     ---       #70
+      00FF1767H   LINE      CODE     ---       #71
+      00FF1773H   LINE      CODE     ---       #73
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 19
+
+
+      00FF1773H   LINE      CODE     ---       #74
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17FDH   BLOCK     CODE     ---       LVL=0
-      00FF17FDH   LINE      CODE     ---       #82
-      00FF17FDH   LINE      CODE     ---       #86
-      00FF1800H   LINE      CODE     ---       #87
-      00FF1802H   LINE      CODE     ---       #89
+      00FF1830H   BLOCK     CODE     ---       LVL=0
+      00FF1830H   LINE      CODE     ---       #82
+      00FF1830H   LINE      CODE     ---       #86
+      00FF1833H   LINE      CODE     ---       #87
+      00FF1835H   LINE      CODE     ---       #89
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       spi
-      00FF17C5H   PUBLIC    CODE     ---       SPI_ISR
-      00FF17E2H   PUBLIC    CODE     ---       SPI_ReadByte
+      00FF17FFH   PUBLIC    CODE     ---       SPI_ISR
+      00FF181CH   PUBLIC    CODE     ---       SPI_ReadByte
       00FF155CH   PUBLIC    CODE     ---       SPI_Init
-      00FF17EDH   PUBLIC    CODE     ---       SPI_WriteByte
+      00FF1827H   PUBLIC    CODE     ---       SPI_WriteByte
       00000020H.1 PUBLIC    BIT      BIT       fSPITransBusy
       000000CFH   SFRSYM    DATA     BYTE      SPDAT
       000000D0H   SFRSYM    DATA     BYTE      PSW
@@ -1223,9 +1263,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       0000008EH   SFRSYM    DATA     BYTE      AUXR
       000000F0H   SFRSYM    DATA     BYTE      B
       000000AFH   SFRSYM    DATA     BYTE      IE2
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 19
-
-
       00000088H   SFRSYM    DATA     BYTE      TCON
       00000089H   SFRSYM    DATA     BYTE      TMOD
       00000098H   SFRSYM    DATA     BYTE      SCON
@@ -1254,6 +1291,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000090H   SFRSYM    DATA     BYTE      P1
       00000080H   SFRSYM    DATA     BYTE      P0
 
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 20
+
+
       00FF155CH   BLOCK     CODE     ---       LVL=0
       00FF155CH   LINE      CODE     ---       #33
       00FF155CH   LINE      CODE     ---       #35
@@ -1261,42 +1301,39 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF1567H   LINE      CODE     ---       #38
       00FF156AH   LINE      CODE     ---       #39
       00FF156DH   LINE      CODE     ---       #40
-      00FF1570H   LINE      CODE     ---       #41
-      00FF1573H   LINE      CODE     ---       #43
-      00FF1583H   LINE      CODE     ---       #45
-      00FF1589H   LINE      CODE     ---       #46
-      00FF158CH   LINE      CODE     ---       #47
-      00FF158EH   LINE      CODE     ---       #49
-      00FF1591H   LINE      CODE     ---       #54
+      00FF1575H   LINE      CODE     ---       #41
+      00FF1578H   LINE      CODE     ---       #43
+      00FF1588H   LINE      CODE     ---       #45
+      00FF158EH   LINE      CODE     ---       #46
+      00FF1591H   LINE      CODE     ---       #47
+      00FF1593H   LINE      CODE     ---       #49
+      00FF1596H   LINE      CODE     ---       #54
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17EDH   BLOCK     CODE     ---       LVL=0
+      00FF1827H   BLOCK     CODE     ---       LVL=0
       R11         REGSYM    ---      BYTE      dat
-      00FF17EDH   LINE      CODE     ---       #61
-      00FF17EDH   LINE      CODE     ---       #63
-      00FF17EFH   LINE      CODE     ---       #64
-      00FF17F2H   LINE      CODE     ---       #65
-      00FF17F5H   LINE      CODE     ---       #66
+      00FF1827H   LINE      CODE     ---       #61
+      00FF1827H   LINE      CODE     ---       #63
+      00FF1829H   LINE      CODE     ---       #64
+      00FF182CH   LINE      CODE     ---       #65
+      00FF182FH   LINE      CODE     ---       #66
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17E2H   BLOCK     CODE     ---       LVL=0
-      00FF17E2H   LINE      CODE     ---       #73
-      00FF17E2H   LINE      CODE     ---       #75
-      00FF17E4H   LINE      CODE     ---       #76
-      00FF17E7H   LINE      CODE     ---       #77
-      00FF17EAH   LINE      CODE     ---       #78
-      00FF17ECH   LINE      CODE     ---       #79
+      00FF181CH   BLOCK     CODE     ---       LVL=0
+      00FF181CH   LINE      CODE     ---       #73
+      00FF181CH   LINE      CODE     ---       #75
+      00FF181EH   LINE      CODE     ---       #76
+      00FF1821H   LINE      CODE     ---       #77
+      00FF1824H   LINE      CODE     ---       #78
+      00FF1826H   LINE      CODE     ---       #79
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF17C5H   BLOCK     CODE     ---       LVL=0
-      00FF17C5H   LINE      CODE     ---       #87
-      00FF17C7H   LINE      CODE     ---       #91
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 20
-
-
-      00FF17CCH   LINE      CODE     ---       #93
-      00FF17CFH   LINE      CODE     ---       #94
-      00FF17D1H   LINE      CODE     ---       #95
+      00FF17FFH   BLOCK     CODE     ---       LVL=0
+      00FF17FFH   LINE      CODE     ---       #87
+      00FF1801H   LINE      CODE     ---       #91
+      00FF1806H   LINE      CODE     ---       #93
+      00FF1809H   LINE      CODE     ---       #94
+      00FF180BH   LINE      CODE     ---       #95
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       pwm
@@ -1304,10 +1341,10 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF004EH   PUBLIC    CODE     ---       PWM_ReadCapture
       00FF0981H   PUBLIC    CODE     ---       PWMA_Init
       00FF0EABH   PUBLIC    CODE     ---       HSPWM_ReadCapture
-      00FF15C5H   PUBLIC    CODE     ---       HSPWMA_ReadReg
-      00FF15F6H   PUBLIC    CODE     ---       HSPWMB_ReadReg
-      00FF0003H   PUBLIC    CODE     ---       HSPWMA_WriteReg
-      00FF16B1H   PUBLIC    CODE     ---       HSPWMB_WriteReg
+      00FF15CDH   PUBLIC    CODE     ---       HSPWMA_ReadReg
+      00FF15FEH   PUBLIC    CODE     ---       HSPWMB_ReadReg
+      00FF16E1H   PUBLIC    CODE     ---       HSPWMA_WriteReg
+      00FF1706H   PUBLIC    CODE     ---       HSPWMB_WriteReg
       00FF0DB0H   PUBLIC    CODE     ---       PWM_UpdateDuty
       000000D0H   SFRSYM    DATA     BYTE      PSW
       0000009DH   SFRSYM    DATA     BYTE      IRCBAND
@@ -1322,6 +1359,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       000000C1H   SFRSYM    DATA     BYTE      WDT_CONTR
       000000DFH   SFRSYM    DATA     BYTE      IP3
       000000F4H   SFRSYM    DATA     BYTE      USBCON
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 21
+
+
       000000B5H   SFRSYM    DATA     BYTE      IP2
       000000FFH   SFRSYM    DATA     BYTE      RSTCFG
       000000E0H   SFRSYM    DATA     BYTE      ACC
@@ -1359,9 +1399,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
 
       00FF0981H   BLOCK     CODE     ---       LVL=0
       00FF0981H   LINE      CODE     ---       #32
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 21
-
-
       00FF0981H   LINE      CODE     ---       #34
       00FF0993H   LINE      CODE     ---       #35
       00FF099DH   LINE      CODE     ---       #36
@@ -1390,6 +1427,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0A9EH   LINE      CODE     ---       #61
       00FF0AAEH   LINE      CODE     ---       #62
       00FF0ABAH   LINE      CODE     ---       #63
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 22
+
+
       00FF0AC2H   LINE      CODE     ---       #65
       00FF0ACAH   LINE      CODE     ---       #66
       00FF0AD6H   LINE      CODE     ---       #67
@@ -1427,9 +1467,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0C27H   LINE      CODE     ---       #102
       00FF0C37H   LINE      CODE     ---       #103
       00FF0C43H   LINE      CODE     ---       #104
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 22
-
-
       00FF0C4BH   LINE      CODE     ---       #105
       00FF0C53H   LINE      CODE     ---       #106
       00FF0C5BH   LINE      CODE     ---       #107
@@ -1458,6 +1495,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0E33H   LINE      CODE     ---       #139
       00FF0E33H   LINE      CODE     ---       #140
       00FF0E44H   LINE      CODE     ---       #141
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 23
+
+
       00FF0E46H   LINE      CODE     ---       #142
       00FF0E46H   LINE      CODE     ---       #143
       00FF0E57H   LINE      CODE     ---       #144
@@ -1495,9 +1535,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0137H   LINE      CODE     ---       #178
       00FF0156H   LINE      CODE     ---       #179
       00FF0158H   LINE      CODE     ---       #180
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 23
-
-
       00FF0158H   LINE      CODE     ---       #182
       00FF015AH   LINE      CODE     ---       #183
       ---         BLOCKEND  ---      ---       LVL=0
@@ -1526,6 +1563,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF11CFH   LINE      CODE     ---       #211
       00FF11D8H   LINE      CODE     ---       #212
       00FF11DAH   LINE      CODE     ---       #213
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 24
+
+
       00FF11DAH   LINE      CODE     ---       #214
       00FF11E3H   LINE      CODE     ---       #215
       00FF11E5H   LINE      CODE     ---       #216
@@ -1557,51 +1597,51 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF0F88H   LINE      CODE     ---       #245
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF15C5H   BLOCK     CODE     ---       LVL=0
+      00FF15CDH   BLOCK     CODE     ---       LVL=0
       R10         REGSYM    ---      BYTE      addr
-      00FF15C7H   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF15CFH   BLOCK     CODE     NEAR LAB  LVL=1
       R11         REGSYM    ---      BYTE      dat
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF15C5H   LINE      CODE     ---       #252
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 24
-
-
-      00FF15C7H   LINE      CODE     ---       #253
-      00FF15C7H   LINE      CODE     ---       #256
-      00FF15D5H   LINE      CODE     ---       #257
-      00FF15F5H   LINE      CODE     ---       #259
-      00FF15F5H   LINE      CODE     ---       #260
+      00FF15CDH   LINE      CODE     ---       #252
+      00FF15CFH   LINE      CODE     ---       #253
+      00FF15CFH   LINE      CODE     ---       #256
+      00FF15DDH   LINE      CODE     ---       #257
+      00FF15FDH   LINE      CODE     ---       #259
+      00FF15FDH   LINE      CODE     ---       #260
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF0003H   BLOCK     CODE     ---       LVL=0
+      00FF16E1H   BLOCK     CODE     ---       LVL=0
       R2          REGSYM    ---      BYTE      addr
       R10         REGSYM    ---      BYTE      dat
-      00FF0003H   LINE      CODE     ---       #268
-      00FF0007H   LINE      CODE     ---       #270
-      00FF0015H   LINE      CODE     ---       #271
-      00FF0027H   LINE      CODE     ---       #272
+      00FF16E1H   LINE      CODE     ---       #268
+      00FF16E5H   LINE      CODE     ---       #270
+      00FF16F3H   LINE      CODE     ---       #271
+      00FF1705H   LINE      CODE     ---       #272
       ---         BLOCKEND  ---      ---       LVL=0
 
-      00FF15F6H   BLOCK     CODE     ---       LVL=0
+      00FF15FEH   BLOCK     CODE     ---       LVL=0
       R10         REGSYM    ---      BYTE      addr
-      00FF15F8H   BLOCK     CODE     NEAR LAB  LVL=1
+      00FF1600H   BLOCK     CODE     NEAR LAB  LVL=1
       R11         REGSYM    ---      BYTE      dat
       ---         BLOCKEND  ---      ---       LVL=1
-      00FF15F6H   LINE      CODE     ---       #279
-      00FF15F8H   LINE      CODE     ---       #280
-      00FF15F8H   LINE      CODE     ---       #283
-      00FF1606H   LINE      CODE     ---       #284
-      00FF1626H   LINE      CODE     ---       #286
-      00FF1626H   LINE      CODE     ---       #287
+      00FF15FEH   LINE      CODE     ---       #279
+      00FF1600H   LINE      CODE     ---       #280
+      00FF1600H   LINE      CODE     ---       #283
+      00FF160EH   LINE      CODE     ---       #284
+      00FF162EH   LINE      CODE     ---       #286
+      00FF162EH   LINE      CODE     ---       #287
       ---         BLOCKEND  ---      ---       LVL=0
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 25
 
-      00FF16B1H   BLOCK     CODE     ---       LVL=0
+
+
+      00FF1706H   BLOCK     CODE     ---       LVL=0
       R2          REGSYM    ---      BYTE      addr
       R10         REGSYM    ---      BYTE      dat
-      00FF16B1H   LINE      CODE     ---       #295
-      00FF16B5H   LINE      CODE     ---       #297
-      00FF16C3H   LINE      CODE     ---       #298
-      00FF16D5H   LINE      CODE     ---       #299
+      00FF1706H   LINE      CODE     ---       #295
+      00FF170AH   LINE      CODE     ---       #297
+      00FF1718H   LINE      CODE     ---       #298
+      00FF172AH   LINE      CODE     ---       #299
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       mathlib
@@ -1631,9 +1671,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00000089H   SFRSYM    DATA     BYTE      TMOD
       00000098H   SFRSYM    DATA     BYTE      SCON
       00000087H   SFRSYM    DATA     BYTE      PCON
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 25
-
-
       000000BCH   SFRSYM    DATA     BYTE      ADC_CONTR
       000000D1H   SFRSYM    DATA     BYTE      PSW1
       000000E7H   SFRSYM    DATA     BYTE      CMPCR2
@@ -1662,6 +1699,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF01B6H   LINE      CODE     ---       #32
       00FF01B6H   LINE      CODE     ---       #34
       00FF01B9H   LINE      CODE     ---       #39
+L251 LINKER/LOCATER V4.66.93.0                                                        03/13/2026  16:06:16  PAGE 26
+
+
       ---         BLOCKEND  ---      ---       LVL=0
 
       ---         MODULE    ---      ---       PRINTF
@@ -1699,9 +1739,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       ---         MODULE    ---      ---       ?C_START
       00FF0000H   PUBLIC    CODE     ---       ?C?STARTUP
       00FF0000H   PUBLIC    CODE     ---       ?C_STARTUP
-L251 LINKER/LOCATER V4.66.93.0                                                        03/11/2026  12:40:54  PAGE 26
-
-
 
       ---         MODULE    ---      ---       ?C?INITEDATA
       00FF14F5H   PUBLIC    CODE     ---       ?C?INITEDATA
@@ -1714,16 +1751,16 @@ SYMBOL TABLE OF MODULE:  .\Objects\FocController_STC (crc8)
       00FF095AH   PUBLIC    CODE     ---       ?C?BMOVEPN8
 
       ---         MODULE    ---      ---       STRLEN
-      00FF17D4H   PUBLIC    CODE     ---       strlen?_
+      00FF180EH   PUBLIC    CODE     ---       strlen?_
 
       ---         MODULE    ---      ---       memcpy
-      00FF16D6H   PUBLIC    CODE     ---       memcpy?_
+      00FF172BH   PUBLIC    CODE     ---       memcpy?_
 
       ---         MODULE    ---      ---       memset
-      00FF1759H   PUBLIC    CODE     ---       memset?_
+      00FF1793H   PUBLIC    CODE     ---       memset?_
 
       ---         MODULE    ---      ---       ?C?INITEDATA_END
-      00FF195BH   PUBLIC    HCONST   WORD      ?C?INITEDATA_END
+      00FF198EH   PUBLIC    HCONST   WORD      ?C?INITEDATA_END
 
-Program Size: data=8.2 edata+hdata=516 xdata=40 const=363 code=6140
+Program Size: data=8.2 edata+hdata=516 xdata=40 const=363 code=6192
 L251 RUN COMPLETE.  0 WARNING(S),  0 ERROR(S)

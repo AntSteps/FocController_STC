@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 1   
+C251 COMPILER V5.60.0,  spi                                                                13/03/26  16:06:15  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE spi
@@ -48,7 +48,7 @@ stmt  level    source
    37   1          SPI_MasterMode();                   //设置SPI为主机模式
    38   1          SPI_IgnoreSS();                     //忽略SS脚
    39   1          SPI_DataMSB();                      //设置SPI数据顺序为MSB (高位在前)
-   40   1          SPI_SetMode0();                     //设置SPI工作模式0 (CPOL=0, CPHA=0)
+   40   1          SPI_SetMode1();                     //设置SPI工作模式1 (CPOL=0, CPHA=1)
    41   1          SPI_SetClockDivider4();             //设置SPI时钟分频
    42   1      
    43   1          HSSPI_Disable();                    //关闭SPI高速模式
@@ -66,7 +66,7 @@ stmt  level    source
    55          
    56          ////////////////////////////////////////
    57          // SPI主机模式发送字节函数
-C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 2   
+C251 COMPILER V5.60.0,  spi                                                                13/03/26  16:06:15  PAGE 2   
 
    58          // 入口参数: dat (待发送的字节数据)
    59          // 函数返回: 无
@@ -119,7 +119,7 @@ stmt  level    source
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =        92     ------
+  code size            =        97     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------
@@ -135,7 +135,7 @@ Module Information          Static   Overlayable
   huge data size       =    ------     ------
   const size           =    ------     ------
   hconst size          =    ------     ------
-C251 COMPILER V5.60.0,  spi                                                                11/03/26  12:32:16  PAGE 3   
+C251 COMPILER V5.60.0,  spi                                                                13/03/26  16:06:15  PAGE 3   
 
 End of Module Information.
 

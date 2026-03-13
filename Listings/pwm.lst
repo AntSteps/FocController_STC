@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 1   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE pwm
@@ -66,7 +66,7 @@ stmt  level    source
    56   1          PWMA_OC1REFPWMMode1();              //设置通道输出参考信号为PWM模式1信号
    57   1          PWMA_DisableOC1FastMode();          //关闭通道快速输出
    58   1          PWMA_UnbufferCCR1();                //关闭CCRn预装载功能
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 2   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 2   
 
    59   1          PWMA_DisableETRFClearOC1REF();      //通道输出不受ETI信号影响
    60   1          PWMA_CC1PNonInverted();             //设置正极通道输出高电平有效
@@ -134,7 +134,7 @@ stmt  level    source
   122          
   123          ////////////////////////////////////////
   124          // 设置PWM通道输出占空比
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 3   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 3   
 
   125          // 入口参数: PWMx: (目标PWM组和通道索引)
   126          //           nCompare: (PWM占空比值)
@@ -202,7 +202,7 @@ stmt  level    source
   188          //           nCompare: (PWM占空比值)
   189          // 函数返回: 无
   190          ////////////////////////////////////////
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 4   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 4   
 
   191          void HSPWM_UpdateDuty(uint8_t PWMx, uint16_t nCompare)
   192          {
@@ -270,7 +270,7 @@ stmt  level    source
   254   1          uint8_t dat;
   255   1      
   256   1          while (HSPWMA_CheckBusy());         //等待前一个异步读写完成
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 5   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 5   
 
   257   1          HSPWMA_AsyncRead(addr, dat);        //触发异步方式读取寄存器
   258   1      
@@ -339,7 +339,7 @@ Module Information          Static   Overlayable
   ebit size            =    ------     ------
   bitaddressable size  =    ------     ------
   ebitaddressable size =    ------     ------
-C251 COMPILER V5.60.0,  pwm                                                                11/03/26  12:32:16  PAGE 6   
+C251 COMPILER V5.60.0,  pwm                                                                13/03/26  16:06:15  PAGE 6   
 
   far data size        =    ------     ------
   huge data size       =    ------     ------

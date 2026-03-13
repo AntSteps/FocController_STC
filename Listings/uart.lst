@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  uart                                                               11/03/26  12:32:16  PAGE 1   
+C251 COMPILER V5.60.0,  uart                                                               13/03/26  16:06:15  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE uart
@@ -66,7 +66,7 @@ stmt  level    source
    54   1      
    55   1          DMA_UART3_SetRxAmount(17);          //设置串口DMA接收总字节数
    56   1          DMA_UART3_SetRxAddress(pu8UR3DMARxBuffer); //设置串口DMA接收缓冲区地址
-C251 COMPILER V5.60.0,  uart                                                               11/03/26  12:32:16  PAGE 2   
+C251 COMPILER V5.60.0,  uart                                                               13/03/26  16:06:15  PAGE 2   
 
    57   1          DMA_UART3_SetInterval(0);           //设置串口DMA发送/接收字节间隔时间（系统时钟�
              -�
@@ -134,7 +134,7 @@ stmt  level    source
              -��所以可能不清空也行。
   118   1          DMA_UART3_TriggerRx();
   119   1          //<<AICUBE_USER_UART3_ISR_CODE3_END>>
-C251 COMPILER V5.60.0,  uart                                                               11/03/26  12:32:16  PAGE 3   
+C251 COMPILER V5.60.0,  uart                                                               13/03/26  16:06:15  PAGE 3   
 
   120   1      }
   121          

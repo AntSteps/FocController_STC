@@ -587,22 +587,22 @@
 		<IAPOffset>0xfc00</IAPOffset>
 	</IAP>
 	<TIMER0>
-		<PeriEnable>0</PeriEnable>
+		<PeriEnable>1</PeriEnable>
 		<EnableCLKO>0</EnableCLKO>
 		<EnableGATE>0</EnableGATE>
 		<BaudrateX2>0</BaudrateX2>
 		<ClockSource>0</ClockSource>
-		<Clock12T>0</Clock12T>
+		<Clock12T>1</Clock12T>
 		<TimerCT>0</TimerCT>
 		<TimerMode>0</TimerMode>
 		<TimerAction>0</TimerAction>
-		<TimerInterval>100</TimerInterval>
+		<TimerInterval>40</TimerInterval>
 		<TimerUnit>0</TimerUnit>
-		<TimerReload>1</TimerReload>
+		<TimerReload>1600</TimerReload>
 		<ClockPrescale>0</ClockPrescale>
 		<UartBaudrate>9600</UartBaudrate>
 		<CLKOPort>-1</CLKOPort>
-		<EnableInt>0</EnableInt>
+		<EnableInt>1</EnableInt>
 		<IntPriority>0</IntPriority>
 	</TIMER0>
 	<TIMER1>
@@ -922,7 +922,7 @@
 		<SPISwap>0</SPISwap>
 		<SPIMode>0</SPIMode>
 		<BitOrder>0</BitOrder>
-		<SPIClockMode>0</SPIClockMode>
+		<SPIClockMode>1</SPIClockMode>
 		<SPIClockDivider>1</SPIClockDivider>
 		<HSSPIClockDivider>2</HSSPIClockDivider>
 		<HSSPISSSetupTiming>3</HSSPISSSetupTiming>

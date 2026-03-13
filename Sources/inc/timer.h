@@ -15,6 +15,7 @@
 //<<AICUBE_USER_DEFINE_END>>
 
 
+void TIMER0_Init(void);
 void TIMER3_Init(void);
 
 

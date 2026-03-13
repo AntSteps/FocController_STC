@@ -74,6 +74,7 @@ void SYS_Init(void)
     PORT3_Init();                       //P3口初始化
     PORT5_Init();                       //P5口初始化
     CLK_Init();                         //时钟模块初始化
+    TIMER0_Init();                      //定时器0初始化
     TIMER3_Init();                      //定时器3初始化
     UART3_Init();                       //串口3初始化
     ADC_Init();                         //ADC初始化
