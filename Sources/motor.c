@@ -5,7 +5,7 @@
 
 #define MOTOR_Q_AXIS_BASE_VOLTAGE 0.5f
 #define MOTOR_PRBS_AMPLITUDE 0.2f
-#define MOTOR_CONTROL_PERIOD_US 1200UL
+#define MOTOR_CONTROL_PERIOD_US 400UL
 #define MOTOR_PRBS_UPDATE_PERIOD_US 10000UL
 #define MOTOR_PRBS_START_DELAY_MS 500UL
 
@@ -69,5 +69,40 @@ void Motor_Commutation_Update(void)
 
 void Motor_Print_LastSample(void)
 {
-    printf("%f,%f\n", s_last_q_axis, s_last_elec_angle);
+    uint8_t frame[12];
+    uint8_t *p_float;
+    int i;
+
+    if (!s_prbs_enabled)
+    {
+        return;
+    }
+
+    // 帧头: 0xAA 0x55
+    frame[0] = 0xAA;
+    frame[1] = 0x55;
+
+    // q_axis (float -> 4 bytes, little-endian)
+    p_float = (uint8_t *)&s_last_q_axis;
+    frame[2] = p_float[0];
+    frame[3] = p_float[1];
+    frame[4] = p_float[2];
+    frame[5] = p_float[3];
+
+    // elec_angle (float -> 4 bytes, little-endian)
+    p_float = (uint8_t *)&s_last_elec_angle;
+    frame[6] = p_float[0];
+    frame[7] = p_float[1];
+    frame[8] = p_float[2];
+    frame[9] = p_float[3];
+
+    // 帧尾: 0x55 0xAA
+    frame[10] = 0x55;
+    frame[11] = 0xAA;
+
+    // 发送 12 字节
+    for (i = 0; i < 12; i++)
+    {
+        putchar(frame[i]);
+    }
 }

@@ -77,7 +77,6 @@ void SVPWM_Update(float angle_el, float mag)
     while (angle_el >= TWO_PI)
         angle_el -= TWO_PI;
 
-    // 2. 强制使用单精度数学函数 (极速调用硬件 TFPU)
     sin_theta = sin(angle_el);
     cos_theta = cos(angle_el);
 
@@ -87,7 +86,6 @@ void SVPWM_Update(float angle_el, float mag)
 
     // 4. 反Clarke变换 (提取公共子表达式，省去两次乘法)
     v_a = v_alpha;
-    temp_alpha = -0.5f * v_alpha;
     temp_beta = SQRT3_2 * v_beta;
     v_b = temp_alpha + temp_beta;
     v_c = temp_alpha - temp_beta;

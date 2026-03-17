@@ -31,7 +31,7 @@ static unsigned char timer0_count = 0;
 void TIMER0_Init(void)
 {
 #define T0_PSCR (0)
-#define T0_RELOAD (65536 - (float)SYSCLK / (T0_PSCR + 1) * 300 / 1000000) 
+#define T0_RELOAD (65536 - (float)SYSCLK / (T0_PSCR + 1) * 200 / 1000000) 
 
     TIMER0_TimerMode();            // 设置定时器0为定时模式
     TIMER0_1TMode();               // 设置定时器0为1T模式
@@ -92,7 +92,7 @@ void TIMER0_ISR(void) interrupt TMR0_VECTOR
         Motor_Print_LastSample();
     }
 
-    if (++timer0_count >= 4)
+    if (++timer0_count >= 2)
     {
         timer0_count = 0;
     }
