@@ -6,8 +6,4 @@
 uint8_t send_messages(ReplyFrame *frame);
 uint8_t UARTController_GetCommand(UartCommand *command);
 
-extern CtrlCmdFrame cmdframe;
-extern ParamCmdFrame paramcmdframe;
-extern ReplyFrame replyframe;
-
 #endif // __UART_CONTROLLER_H__

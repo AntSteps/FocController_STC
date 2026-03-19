@@ -47,34 +47,31 @@ void main(void)
     uint8_t reply_seq;
 
     SYS_Init();
+    TIMER0_Stop();
 
-    //<<AICUBE_USER_MAIN_CODE_BEGIN>>
-    // 在此添加主函数中运行一次的用户代码
+    //硬件初始化之后开始模块初始化
     Encoder_Init();
     ParamStorage_Init();                /* 初始化参数存储，从EEPROM加载参数 */
 
     /* 从参数存储获取指针 */
     params = ParamStorage_Get();
+    LoadStoredParamsToModules(params);
 
-    TIMER0_Stop();
 
     /* 将存储参数或默认参数加载到各模块 */
-    LoadStoredParamsToModules(params);
 
     SpeedController_SetTarget(20.0f);
     reply_seq = 0;
 
-    TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
+    // TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
 
     while (1)
-    {
-        while (UARTController_GetCommand(&command) == 0)
+    {       
+        if (UARTController_GetCommand(&command))
         {
-            ProcessCommand(&command);
+            UartReply(0); // 回复当前状态
+            // ProcessCommand(&command);
         }
-
-        UartReply(reply_seq++);
-        delay_ms(10);
     }
 }
 

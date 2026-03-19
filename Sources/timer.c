@@ -56,7 +56,7 @@ void TIMER3_Init(void)
 #ifdef BAUDRATE
 #undef BAUDRATE
 #endif
-#define BAUDRATE (500000)
+#define BAUDRATE (1000000)
 #define T3_RELOAD (65536 - (SYSCLK / BAUDRATE + 2) / 4)
 
     TIMER3_TimerMode();            // 设置定时器3为定时模式
@@ -79,9 +79,9 @@ void TIMER0_ISR(void) interrupt TMR0_VECTOR
 {
     //<<AICUBE_USER_TIMER0_ISR_CODE1_BEGIN>>
     // 在此添加中断函数用户代码
-    P36=1;
+    // P36=1;
     Motor_Update();    // 5kHz换相，内部处理300Hz速度环
-    P36=0;
+    // P36=0;
 
     //<<AICUBE_USER_TIMER0_ISR_CODE1_END>>
 }

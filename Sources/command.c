@@ -6,15 +6,29 @@
 #include "adc.h"
 #include "motor.h"
 
+static void Command_DebugPulse(uint8_t count)
+{
+    while (count--)
+    {
+        P36 = 1;
+        delay_us(20);
+        P36 = 0;
+        delay_us(20);
+    }
+}
+
 static void ApplyControlCommand(CtrlCmdFrame *frame);
 static void ApplyParamCommand(ParamCmdFrame *frame);
-
+void UartReply(uint8_t seq);
 void ProcessCommand(UartCommand *command)
 {
+    Command_DebugPulse(10);
+
     switch (command->type)
     {
     case UART_COMMAND_CTRL:
         ApplyControlCommand(&command->ctrl);
+        UartReply(command->ctrl.seq); // 立即回复当前状态
         break;
 
     case UART_COMMAND_PARAM:
@@ -112,7 +126,11 @@ static void ApplyParamCommand(ParamCmdFrame *frame)
 
 void UartReply(uint8_t seq)
 {
-    replyframe.head = REPLY_FRAME_HEAD;
+    uint8_t send_ok;
+    ReplyFrame replyframe;
+
+
+    replyframe.head = REPLY_FRAME_HEAD;  
     replyframe.id = 0x01;
     replyframe.velocity = 3.14159f;
     replyframe.output = Motor_GetQAxisVoltage();
@@ -120,5 +138,6 @@ void UartReply(uint8_t seq)
     replyframe.voltage = ADC_GetBusVoltage();
     replyframe.status = 0x00;
     replyframe.seq = seq;
-    send_messages(&replyframe);
+    send_ok = send_messages(&replyframe);
+
 }
