@@ -42,7 +42,7 @@ void SPI_Init(void)
 
     HSSPI_Disable();                    //关闭SPI高速模式
 
-    SPI_SetIntPriority(0);              //设置中断为最低优先级
+    SPI_SetIntPriority(1);              //设置中断为最低优先级
     SPI_EnableInt();                    //使能SPI中断
     fSPITransBusy = 0;                  //清除SPI忙标志位
 

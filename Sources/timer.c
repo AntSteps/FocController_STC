@@ -1,28 +1,27 @@
 //<<AICUBE_USER_HEADER_REMARK_BEGIN>>
 ////////////////////////////////////////
-// 在此添加用户文件头说明信息  
+// 在此添加用户文件头说明信息
 // 文件名称: timer.c
-// 文件描述: 
+// 文件描述:
 // 文件版本: V1.0
 // 修改记录:
 //   1. (2026-03-06) 创建文件
 ////////////////////////////////////////
 //<<AICUBE_USER_HEADER_REMARK_END>>
 
-
 #include "config.h"
 
-
 //<<AICUBE_USER_INCLUDE_BEGIN>>
-// 在此添加用户头文件包含  
+// 在此添加用户头文件包含
+#include "motor.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
-
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-// 在此添加用户全局变量定义、用户宏定义以及函数声明  
+// 在此添加用户全局变量定义、用户宏定义以及函数声明
+
+
+static unsigned char timer0_count = 0;
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
-
-
 
 ////////////////////////////////////////
 // 定时器0初始化函数
@@ -31,21 +30,21 @@
 ////////////////////////////////////////
 void TIMER0_Init(void)
 {
-#define T0_PSCR                 (0)
-#define T0_RELOAD               (65536 - (float)SYSCLK / (T0_PSCR + 1) * 40 / 1000000) //定时周期40微秒
+#define T0_PSCR (0)
+#define T0_RELOAD (65536 - (float)SYSCLK / (T0_PSCR + 1) * 300 / 1000000) 
 
-    TIMER0_TimerMode();                 //设置定时器0为定时模式
-    TIMER0_1TMode();                    //设置定时器0为1T模式
-    TIMER0_Mode0();                     //设置定时器0为模式0 (16位自动重载模式)
-    TIMER0_DisableGateINT0();           //禁止定时器0门控
-    TIMER0_SetIntPriority(0);           //设置中断为最低优先级
-    TIMER0_EnableInt();                 //使能定时器0中断
-    TIMER0_SetPrescale(T0_PSCR);        //设置定时器0的8位预分频
-    TIMER0_SetReload16(T0_RELOAD);      //设置定时器0的16位重载值
-    TIMER0_Run();                       //定时器0开始运行
+    TIMER0_TimerMode();            // 设置定时器0为定时模式
+    TIMER0_1TMode();               // 设置定时器0为1T模式
+    TIMER0_Mode0();                // 设置定时器0为模式0 (16位自动重载模式)
+    TIMER0_DisableGateINT0();      // 禁止定时器0门控
+    TIMER0_SetIntPriority(0);      // 设置中断为最低优先级
+    TIMER0_EnableInt();            // 使能定时器0中断
+    TIMER0_SetPrescale(T0_PSCR);   // 设置定时器0的8位预分频
+    TIMER0_SetReload16(T0_RELOAD); // 设置定时器0的16位重载值
+    TIMER0_Run();                  // 定时器0开始运行
 
     //<<AICUBE_USER_TIMER0_INITIAL_BEGIN>>
-    // 在此添加用户初始化代码  
+    // 在此添加用户初始化代码
     //<<AICUBE_USER_TIMER0_INITIAL_END>>
 }
 
@@ -56,24 +55,23 @@ void TIMER0_Init(void)
 ////////////////////////////////////////
 void TIMER3_Init(void)
 {
-#define T3_PSCR                 (0)
+#define T3_PSCR (0)
 #ifdef BAUDRATE
 #undef BAUDRATE
 #endif
-#define BAUDRATE                (115200)
-#define T3_RELOAD               (65536 - (SYSCLK / BAUDRATE + 2) / 4)
+#define BAUDRATE (1000000)
+#define T3_RELOAD (65536 - (SYSCLK / BAUDRATE + 2) / 4)
 
-    TIMER3_TimerMode();                 //设置定时器3为定时模式
-    TIMER3_1TMode();                    //设置定时器3为1T模式
-    TIMER3_SetPrescale(T3_PSCR);        //设置定时器3的8位预分频
-    TIMER3_SetReload16(T3_RELOAD);      //设置定时器3的16位重载值
-    TIMER3_Run();                       //定时器3开始运行
+    TIMER3_TimerMode();            // 设置定时器3为定时模式
+    TIMER3_1TMode();               // 设置定时器3为1T模式
+    TIMER3_SetPrescale(T3_PSCR);   // 设置定时器3的8位预分频
+    TIMER3_SetReload16(T3_RELOAD); // 设置定时器3的16位重载值
+    TIMER3_Run();                  // 定时器3开始运行
 
     //<<AICUBE_USER_TIMER3_INITIAL_BEGIN>>
-    // 在此添加用户初始化代码  
+    // 在此添加用户初始化代码
     //<<AICUBE_USER_TIMER3_INITIAL_END>>
 }
-
 
 ////////////////////////////////////////
 // 定时器0中断服务程序
@@ -83,13 +81,18 @@ void TIMER3_Init(void)
 void TIMER0_ISR(void) interrupt TMR0_VECTOR
 {
     //<<AICUBE_USER_TIMER0_ISR_CODE1_BEGIN>>
-    // 在此添加中断函数用户代码  
+    // 在此添加中断函数用户代码
+    P36=1;
+    if (++timer0_count >= 4)
+    {
+        timer0_count = 0;
+        Motor_Commutation_Update();    
+    }
+    P36=0;
+
     //<<AICUBE_USER_TIMER0_ISR_CODE1_END>>
 }
 
-
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-// 在此添加用户函数实现代码  
+// 在此添加用户函数实现代码
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
-
-

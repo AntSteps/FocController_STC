@@ -325,6 +325,11 @@
           <GroupName>User Sources</GroupName>
           <Files>
             <File>
+              <FileName>crc6.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\crc6.c</FilePath>
+            </File>
+            <File>
               <FileName>crc8.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\crc8.c</FilePath>
@@ -335,9 +340,24 @@
               <FilePath>.\Sources\uart_controller.c</FilePath>
             </File>
             <File>
+              <FileName>encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\encoder.c</FilePath>
+            </File>
+            <File>
               <FileName>svpwm.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\svpwm.c</FilePath>
+            </File>
+            <File>
+              <FileName>calibration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\calibration.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\motor.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -18,14 +18,13 @@
 #include "encoder.h"
 #include "pwm.h"
 #include "svpwm.h"
+#include "calibration.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
-static float svpwm_angle = 0.0f; /* SVPWM角度 */
-static float svpwm_step = 0.02f; /* 角度步进，控制转速 */
-static float svpwm_mag = 0.1f;   /* 调制比，范围[0, 1] */
+
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 
@@ -46,21 +45,19 @@ void main(void)
     //<<AICUBE_USER_MAIN_CODE_BEGIN>>
     // 在此添加主函数中运行一次的用户代码
     DMA_UART3_TriggerRx(); // 串口3触发dma
+    Encoder_Init();
+    TIMER0_Stop();
+    Motor_Calibration_Init(MOTOR_CALIB_DEFAULT_POLE_PAIRS);
+    Motor_Calibration_AutoCalibrate();
+    TIMER0_Run();       //定时器接管闭环控制
     printf("Hello World !\n");
     //<<AICUBE_USER_MAIN_CODE_END>>
 
     while (1)
     {
         //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
-        /* SVPWM开环控制 */
-        svpwm_angle += svpwm_step;
-        if (svpwm_angle >= 6.283185f)
-            svpwm_angle -= 6.283185f; /* 2π = 6.283185 */
-
-        /* 调用SVPWM更新函数，角度+幅值输入 */
-        SVPWM_Update(svpwm_angle, svpwm_mag);
-
-        delay_us(100); /* 延时控制切换速度 */
+        // 从校准库中获取包含常数偏置与谐波偏心补偿修正后的绝对机械角度并打印
+        // printf("Angle: %.2f\n", Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle()));
         //<<AICUBE_USER_MAIN_LOOP_END>>
     }
 }
@@ -99,6 +96,7 @@ void SYS_Init(void)
     //<<AICUBE_USER_INITIAL_CODE_BEGIN>>
     // 在此添加用户初始化代码
     Encoder_Init();
+
     //<<AICUBE_USER_INITIAL_CODE_END>>
 
     EnableGlobalInt();                  //使能全局中断

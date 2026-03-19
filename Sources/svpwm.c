@@ -9,48 +9,26 @@
 ////////////////////////////////////////
 //<<AICUBE_USER_HEADER_REMARK_END>>
 
-
 #include "config.h"
-
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
 #include "svpwm.h"
-//<<AICUBE_USER_INCLUDE_END>>
 
+//<<AICUBE_USER_INCLUDE_END>>
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
 
 /* 缓存PWM周期值，避免重复读取寄存器 */
 static uint16_t s_pwm_period = 0;
-
+static float data s_half_period = 0.0f;
 /* 常量定义 */
-#define SQRT3_2     0.86602540378f  /* sqrt(3)/2 */
-#define PI          3.14159265359f
-#define TWO_PI      6.28318530718f
+#define SQRT3_2 0.86602540378f /* sqrt(3)/2 */
+#define PI 3.14159265359f
+#define TWO_PI 6.28318530718f
 #define ONE_OVER_2PI 0.15915494309f /* 1/(2*PI) */
 
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
-
-
-////////////////////////////////////////
-// 角度归一化到 [-PI, PI]
-// 入口参数: angle: 输入角度 [rad]
-// 函数返回: 归一化后的角度 [rad]
-////////////////////////////////////////
-static float angle_normalize(float angle)
-{
-    float turns;
-    int32_t turns_int;
-    float wrapped_angle;
-
-    /* 快速角度归一化: angle - 2*PI * round(angle / (2*PI)) */
-    turns = angle * ONE_OVER_2PI;
-    turns_int = (int32_t)(turns > 0.0f ? turns + 0.5f : turns - 0.5f);
-    wrapped_angle = angle - TWO_PI * (float)turns_int;
-
-    return wrapped_angle;
-}
 
 ////////////////////////////////////////
 // SVPWM初始化函数
@@ -61,7 +39,7 @@ void SVPWM_Init(void)
 {
     /* 缓存周期值，PWM重载值为399，所以周期是399+1=400 */
     s_pwm_period = 399;
-
+    s_half_period = (float)(s_pwm_period + 1) * 0.5f;
     /* 确保PWM通道已初始化并运行 */
     /* 这里假设PWMA_Init()已在SYS_Init()中调用 */
 }
@@ -72,111 +50,113 @@ void SVPWM_Init(void)
 //           v_beta:  静止坐标系beta轴电压
 // 函数返回: 无
 ////////////////////////////////////////
-void SVPWM_UpdateCore(float v_alpha, float v_beta)
-{
-    float v_a;
-    float v_b;
-    float v_c;
-    float v_min;
-    float v_max;
-    float v_offset;
-    float half_period;
-    float duty_a;
-    float duty_b;
-    float duty_c;
-    float period_f;
-    uint16_t duty_u16;
+// 常量预定义 (保持不变)
+#define SQRT3_2 0.86602540378f
+#define TWO_PI 6.28318530718f
 
-    /* 1. 反Clarke变换 (alpha/beta -> abc) */
-    v_a = v_alpha;
-    v_b = -0.5f * v_alpha + SQRT3_2 * v_beta;
-    v_c = -0.5f * v_alpha - SQRT3_2 * v_beta;
 
-    /* 2. 零序注入（Min-Max Method） */
-    v_min = v_a;
-    v_max = v_a;
 
-    if (v_b < v_min)
-        v_min = v_b;
-    if (v_c < v_min)
-        v_min = v_c;
-    if (v_b > v_max)
-        v_max = v_b;
-    if (v_c > v_max)
-        v_max = v_c;
-
-    v_offset = -0.5f * (v_max + v_min);
-
-    /* 3. 转换为占空比并限幅 */
-    half_period = (float)s_pwm_period * 0.5f;
-
-    duty_a = half_period * (1.0f + v_a + v_offset);
-    duty_b = half_period * (1.0f + v_b + v_offset);
-    duty_c = half_period * (1.0f + v_c + v_offset);
-
-    period_f = (float)s_pwm_period;
-
-    if (duty_a < 0.0f)
-        duty_a = 0.0f;
-    else if (duty_a > period_f)
-        duty_a = period_f;
-
-    if (duty_b < 0.0f)
-        duty_b = 0.0f;
-    else if (duty_b > period_f)
-        duty_b = period_f;
-
-    if (duty_c < 0.0f)
-        duty_c = 0.0f;
-    else if (duty_c > period_f)
-        duty_c = period_f;
-
-    /* 4. 写入PWM寄存器 */
-    duty_u16 = (uint16_t)duty_a;
-    PWM_UpdateDuty(PWMA_CH1, duty_u16);
-
-    duty_u16 = (uint16_t)duty_b;
-    PWM_UpdateDuty(PWMA_CH2, duty_u16);
-
-    duty_u16 = (uint16_t)duty_c;
-    PWM_UpdateDuty(PWMA_CH3, duty_u16);
-}
 
 ////////////////////////////////////////
-// SVPWM更新 - 角度+幅值输入
-// 入口参数: angle_el: 电角度 [rad]
-//           mag: 调制比 [0, 1.1547]，建议限制在[0, 1]
-// 函数返回: 无
-//
-// 使用math库的sin/cos函数计算
+// SVPWM更新 - 高性能压榨版
 ////////////////////////////////////////
 void SVPWM_Update(float angle_el, float mag)
 {
-    float normalized_angle;
-    float sin_theta;
-    float cos_theta;
-    float v_alpha;
-    float v_beta;
+    // 不要加 data 关键字，让编译器全部分配进寄存器
+    float sin_theta, cos_theta;
+    float v_alpha, v_beta;
+    float v_a, v_b, v_c;
+    float v_min, v_max, v_offset;
+    float duty_a, duty_b, duty_c;
+    float temp_alpha, temp_beta; // 用于复用计算结果
 
-    /* 角度归一化到 [-PI, PI] 范围 */
-    normalized_angle = angle_normalize(angle_el);
+    // 1. 简化的角度归一化 (直接循环减，避免 float-int-float 转换的开销)
+    // 假设上层给的角度通常不会偏离 0~2PI 太远
+    while (angle_el < 0.0f)
+        angle_el += TWO_PI;
+    while (angle_el >= TWO_PI)
+        angle_el -= TWO_PI;
 
-    /* 使用math库的sin和cos函数（替代CORDIC硬件） */
-    sin_theta = sin(normalized_angle);
-    cos_theta = cos(normalized_angle);
+    // 2. 强制使用单精度数学函数 (极速调用硬件 TFPU)
+    sin_theta = sin(angle_el);
+    cos_theta = cos(angle_el);
 
-    /* 反Park变换: (d=mag, q=0) -> (v_alpha, v_beta) */
+    // 3. 反Park变换
     v_alpha = mag * cos_theta;
     v_beta = mag * sin_theta;
 
-    /* 调用核心SVPWM */
-    SVPWM_UpdateCore(v_alpha, v_beta);
+    // 4. 反Clarke变换 (提取公共子表达式，省去两次乘法)
+    v_a = v_alpha;
+    temp_alpha = -0.5f * v_alpha;
+    temp_beta = SQRT3_2 * v_beta;
+    v_b = temp_alpha + temp_beta;
+    v_c = temp_alpha - temp_beta;
+
+    // 5. 零序注入 (Min-Max 三目运算符压榨)
+    v_max = v_a > v_b ? (v_a > v_c ? v_a : v_c) : (v_b > v_c ? v_b : v_c);
+    v_min = v_a < v_b ? (v_a < v_c ? v_a : v_c) : (v_b < v_c ? v_b : v_c);
+    v_offset = -0.5f * (v_max + v_min);
+
+    // 6. 占空比计算 (减少乘法，提取半周期变量)
+    // 公式变型： duty = half_period + half_period * (v + offset)
+    v_offset += 1.0f; // 巧妙融合常数 1.0f
+    duty_a = s_half_period * (v_a + v_offset);
+    duty_b = s_half_period * (v_b + v_offset);
+    duty_c = s_half_period * (v_c + v_offset);
+
+    // 7. 限幅保护 (三目运算符)
+    duty_a = duty_a < 0.0f ? 0.0f : (duty_a > s_pwm_period ? s_pwm_period : duty_a);
+    duty_b = duty_b < 0.0f ? 0.0f : (duty_b > s_pwm_period ? s_pwm_period : duty_b);
+    duty_c = duty_c < 0.0f ? 0.0f : (duty_c > s_pwm_period ? s_pwm_period : duty_c);
+
+    // 8. 直接写入 PWM 寄存器 (强烈建议替换掉原来的函数调用)
+
+    PWM_UpdateDuty(PWMA_CH1, (uint16_t)duty_a);
+
+    PWM_UpdateDuty(PWMA_CH2, (uint16_t)duty_b);
+
+    PWM_UpdateDuty(PWMA_CH3, (uint16_t)duty_c);
 }
 
+void SVPWM_UpdateQAxis(float angle_el, float mag)
+{
+    float sin_theta, cos_theta;
+    float v_alpha, v_beta;
+    float v_a, v_b, v_c;
+    float v_min, v_max, v_offset;
+    float duty_a, duty_b, duty_c;
+    float temp_alpha, temp_beta;
 
+    sin_theta = sin(angle_el);
+    cos_theta = cos(angle_el);
+
+    v_alpha = -mag * sin_theta;
+    v_beta = mag * cos_theta;
+
+    v_a = v_alpha;
+    temp_alpha = -0.5f * v_alpha;
+    temp_beta = SQRT3_2 * v_beta;
+    v_b = temp_alpha + temp_beta;
+    v_c = temp_alpha - temp_beta;
+
+    v_max = v_a > v_b ? (v_a > v_c ? v_a : v_c) : (v_b > v_c ? v_b : v_c);
+    v_min = v_a < v_b ? (v_a < v_c ? v_a : v_c) : (v_b < v_c ? v_b : v_c);
+    v_offset = -0.5f * (v_max + v_min);
+
+    v_offset += 1.0f;
+    duty_a = s_half_period * (v_a + v_offset);
+    duty_b = s_half_period * (v_b + v_offset);
+    duty_c = s_half_period * (v_c + v_offset);
+
+    duty_a = duty_a < 0.0f ? 0.0f : (duty_a > s_pwm_period ? s_pwm_period : duty_a);
+    duty_b = duty_b < 0.0f ? 0.0f : (duty_b > s_pwm_period ? s_pwm_period : duty_b);
+    duty_c = duty_c < 0.0f ? 0.0f : (duty_c > s_pwm_period ? s_pwm_period : duty_c);
+
+    PWM_UpdateDuty(PWMA_CH1, (uint16_t)duty_a);
+    PWM_UpdateDuty(PWMA_CH2, (uint16_t)duty_b);
+    PWM_UpdateDuty(PWMA_CH3, (uint16_t)duty_c);
+}
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
 // 在此添加用户函数实现代码
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
-
-

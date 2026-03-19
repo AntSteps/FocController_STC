@@ -6,12 +6,13 @@
 
 sbit ENCODER_CS = P3^5;
 
-typedef struct {
-    uint16_t raw_angle;     // 读取到的原始值 (0-16383, 14bit)
-    float degree;           // 解算后的角度 (0-360度)
-} Encoder;
 
 void Encoder_Init(void);
-void Encoder_Update(Encoder* enc);
+void Encoder_Update();
+float Encoder_UpdateAndGetAngle(void);
+
+/* 返回机械角，单位: rad，范围约 [0, 2PI) */
+float Encoder_Get_Angle(void);
+uint8_t Encoder_Get_DataGood(void);
 
 #endif // __ENCODER_H__
