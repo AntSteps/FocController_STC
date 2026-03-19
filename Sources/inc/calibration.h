@@ -20,14 +20,11 @@ typedef struct
     float harmonic_phase_2;
 } Motor_Calibration;
 
-/* 初始化校准模块，传入已有的校准参数，传入NULL则使用默认参数 */
+/* 初始化并应用校准参数，传入NULL则使用默认参数 */
 void Motor_Calibration_Init(const Motor_Calibration *calib);
 
 /* 自动校准，返回校准结果，不直接应用到内部状态 */
 Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs);
-
-/* 应用校准参数到模块 */
-void Motor_Calibration_Apply(const Motor_Calibration *calib);
 
 /* 获取当前校准参数 */
 const Motor_Calibration* Motor_Calibration_GetCurrent(void);

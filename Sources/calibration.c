@@ -195,11 +195,8 @@ Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
 
     if (pole_pairs <= 0)
     {
-        printf("[CAL] invalid pole_pairs=%d\n", pole_pairs);
         return result;
     }
-
-    printf("[CAL] start align...\n");
 
     /* 1) 锁定电角度0，给转子建立稳定参考 */
     SVPWM_Update(0.0f, CALIB_VOLTAGE);
@@ -232,10 +229,8 @@ Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
     } else {
         result.dir = 1;
     }
-    printf("[CAL] dir=%d\n", result.dir);
 
     /* 3) 扫完整机械一圈，拟合编码器偏心导致的一次/二次机械谐波 */
-    sum_diff = 0.0f;
     sum_diff_sq = 0.0f;
     sum_sin_1 = 0.0f;
     sum_cos_1 = 0.0f;
@@ -355,26 +350,6 @@ Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
         {
             harmonic2_gain = 0.0f;
         }
-
-        printf("[CAL] done, elec_offset=%.4f rad (%.2f deg), N=%d\n",
-               result.electrical_offset_rad,
-               result.electrical_offset_rad * CALIB_RAD_TO_DEG,
-               sample_count);
-        printf("[CAL] h1 amp=%.4f rad (%.2f deg), phase=%.2f deg\n",
-               result.harmonic_amp_1,
-               result.harmonic_amp_1 * CALIB_RAD_TO_DEG,
-               result.harmonic_phase_1 * CALIB_RAD_TO_DEG);
-        printf("[CAL] h2 amp=%.4f rad (%.2f deg), phase=%.2f deg\n",
-               result.harmonic_amp_2,
-               result.harmonic_amp_2 * CALIB_RAD_TO_DEG,
-               result.harmonic_phase_2 * CALIB_RAD_TO_DEG);
-        printf("[CAL] rms: offset=%.2f deg, h1=%.2f deg, h1+h2=%.2f deg\n",
-               rms_offset_only * CALIB_RAD_TO_DEG,
-               rms_h1 * CALIB_RAD_TO_DEG,
-               rms_h2 * CALIB_RAD_TO_DEG);
-        printf("[CAL] h2 gain=%.1f%%, confidence=%.1f%%\n",
-               harmonic2_gain * 100.0f,
-               overall_confidence * 100.0f);
     }
     else
     {
@@ -383,22 +358,12 @@ Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
         result.harmonic_phase_1 = 0.0f;
         result.harmonic_amp_2 = 0.0f;
         result.harmonic_phase_2 = 0.0f;
-        printf("[CAL] failed, use offset=0\n");
     }
 
     /* 停止输出，避免持续发热 */
     SVPWM_Update(0.0f, 0.0f);
 
     return result;
-}
-
-void Motor_Calibration_Apply(const Motor_Calibration *calib)
-{
-    if (calib != NULL)
-    {
-        g_motor_cal = *calib;
-        Calibration_UpdateRuntimeCache();
-    }
 }
 
 const Motor_Calibration* Motor_Calibration_GetCurrent(void)
