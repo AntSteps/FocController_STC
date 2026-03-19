@@ -77,6 +77,7 @@ void UART3_Init(void)
 ////////////////////////////////////////
 char putchar (char dat)                 //将串口3和printf函数绑定
 {
+    //注释掉以屏蔽printf发送
     while (!UART3_CheckTxFlag());
     UART3_ClearTxFlag();
     UART3_SendData(dat);
@@ -114,7 +115,7 @@ void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
         DMA_UART3_ClearRxFlag();        //清除串口接收DMA中断标志
     }
     Write_RXD_Buffer(pu8UR3DMARxBuffer, sizeof(pu8UR3DMARxBuffer));
-    memset(pu8UR3DMARxBuffer, 0x00, sizeof(pu8UR3DMARxBuffer)); // FIXME: 我不确定是否需要在每次接收后清空DMA接收缓冲区，但为了安全起见先清空。但是之前没清空的时候也没出过问题，所以可能不清空也行。
+    memset(pu8UR3DMARxBuffer, 0x00, sizeof(pu8UR3DMARxBuffer)); 
     DMA_UART3_TriggerRx();
     //<<AICUBE_USER_UART3_ISR_CODE3_END>>
 }

@@ -18,9 +18,6 @@
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
-
-
-static unsigned char timer0_count = 0;
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 ////////////////////////////////////////
@@ -31,7 +28,7 @@ static unsigned char timer0_count = 0;
 void TIMER0_Init(void)
 {
 #define T0_PSCR (0)
-#define T0_RELOAD (65536 - (float)SYSCLK / (T0_PSCR + 1) * 300 / 1000000) 
+#define T0_RELOAD (65536 - (float)SYSCLK / (T0_PSCR + 1) * 200 / 1000000) 
 
     TIMER0_TimerMode();            // 设置定时器0为定时模式
     TIMER0_1TMode();               // 设置定时器0为1T模式
@@ -83,11 +80,7 @@ void TIMER0_ISR(void) interrupt TMR0_VECTOR
     //<<AICUBE_USER_TIMER0_ISR_CODE1_BEGIN>>
     // 在此添加中断函数用户代码
     P36=1;
-    if (++timer0_count >= 4)
-    {
-        timer0_count = 0;
-        Motor_Commutation_Update();    
-    }
+    Motor_Update();    // 5kHz换相，内部处理300Hz速度环
     P36=0;
 
     //<<AICUBE_USER_TIMER0_ISR_CODE1_END>>

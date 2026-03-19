@@ -410,6 +410,21 @@
               <FilePath>.\Sources\mathlib.c</FilePath>
             </File>
             <File>
+              <FileName>iap.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\iap.c</FilePath>
+            </File>
+            <File>
+              <FileName>param_storage.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\param_storage.c</FilePath>
+            </File>
+            <File>
+              <FileName>control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\control.c</FilePath>
+            </File>
+            <File>
               <FileName>ai8051u_32_mdu32.lib</FileName>
               <FileType>4</FileType>
               <FilePath>.\Sources\lib\ai8051u_32_mdu32.lib</FilePath>

@@ -19,11 +19,17 @@
 #include "pwm.h"
 #include "svpwm.h"
 #include "calibration.h"
+#include "param_storage.h"
+#include "control.h"
+#include "uart_send_def.h"
+#include "uart_controller.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
+
+void ReplyFrame_Assemble(void);
 
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
@@ -36,28 +42,62 @@
 ////////////////////////////////////////
 void main(void)
 {
-    //<<AICUBE_USER_MAIN_INITIAL_BEGIN>>
-    // 在此添加用户主函数初始化代码
-    //<<AICUBE_USER_MAIN_INITIAL_END>>
+    ParamStorage_Data_t *params;
+    Motor_Calibration new_calib;
+    /* 速度环参数结构体，静态存储保证生命周期，C89需在声明时初始化 */
+    static SpeedController_Params_t speed_ctrl_params = {
+        0.001f,         /* kp */
+        0.000f,         /* ki */
+        1.0f,           /* out_max */
+        -1.0f,          /* out_min */
+        5.0f,           /* lpf_time_constant_ms */
+        {0.0f, 0.0f, 0.0f}, /* ff: velocity, acceleration, friction */
+        0,              /* enable_feedforward */
+        300.0f          /* sample_freq_hz */
+    };
 
     SYS_Init();
 
     //<<AICUBE_USER_MAIN_CODE_BEGIN>>
     // 在此添加主函数中运行一次的用户代码
-    DMA_UART3_TriggerRx(); // 串口3触发dma
+    DMA_UART3_TriggerRx(); /* 串口3触发dma */
+
     Encoder_Init();
+    ParamStorage_Init();                /* 初始化参数存储，从EEPROM加载参数 */
+
+    /* 从参数存储获取指针 */
+    params = ParamStorage_Get();
+
     TIMER0_Stop();
-    Motor_Calibration_Init(MOTOR_CALIB_DEFAULT_POLE_PAIRS);
-    Motor_Calibration_AutoCalibrate();
-    TIMER0_Run();       //定时器接管闭环控制
+
+    /* 用参数存储中的校准数据初始化（如果EEPROM中有有效数据） */
+    Motor_Calibration_Init(&params->motor_calib);
+
+    /* 执行自动校准，返回校准结果 */
+    new_calib = Motor_Calibration_AutoCalibrate(params->motor_pole_pairs);
+
+    /* 将新的校准结果应用到参数存储 */
+    params->motor_calib = new_calib;
+    ParamStorage_Save();                 /* 保存到EEPROM */
+
+    /* 应用校准参数到运行模块 */
+    Motor_Calibration_Apply(&new_calib);
+
+    /* 初始化速度环 */
+    SpeedController_Init(&speed_ctrl_params);
+
+    /* 设置目标速度 (rad/s), 目标100 rad/s (约955 rpm) */
+    SpeedController_SetTarget(20.0f);
+
+    TIMER0_Run();       /* 定时器接管闭环控制 */
     printf("Hello World !\n");
-    //<<AICUBE_USER_MAIN_CODE_END>>
+    /*<<AICUBE_USER_MAIN_CODE_END>>*/
 
     while (1)
     {
-        //<<AICUBE_USER_MAIN_LOOP_BEGIN>>
-        // 从校准库中获取包含常数偏置与谐波偏心补偿修正后的绝对机械角度并打印
-        // printf("Angle: %.2f\n", Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle()));
+        /*<AICUBE_USER_MAIN_LOOP_BEGIN>*/
+        ReplyFrame_Assemble();
+        delay_ms(10);  /* 100Hz 发送频率 */
         //<<AICUBE_USER_MAIN_LOOP_END>>
     }
 }
@@ -92,6 +132,7 @@ void SYS_Init(void)
     PWMA_Init();    /* 高级PWMA初始化 */
     MATHLIB_Init(); /* MATH库初始化 */
     SVPWM_Init();   /* SVPWM初始化 */
+    IAP_Init();
 
     //<<AICUBE_USER_INITIAL_CODE_BEGIN>>
     // 在此添加用户初始化代码
@@ -134,7 +175,37 @@ void delay_ms(uint16_t ms)
 
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-// 在此添加用户函数实现代码  
+// 在此添加用户函数实现代码
+
+////////////////////////////////////////
+// 组装并发送ReplyFrame
+// 入口参数: 无
+// 函数返回: 无
+////////////////////////////////////////
+void ReplyFrame_Assemble(void)
+{
+    /* 填充帧头 (大端: 0x07 0x21) */
+    replyframe.head = 0x0721;
+
+    /* 电机ID */
+    replyframe.id = 0x01;
+
+    /* TODO: 用户在这里填充实际数据，目前使用dummy数据 */
+    replyframe.velocity = 3.14159f;     /* 当前速度 rad/s */
+    replyframe.output = 0.5f;           /* 控制输出/占空比 */
+    replyframe.position = 1.234f;       /* 转子位置 rad */
+    replyframe.voltage = ADC_GetBusVoltage();  /* 母线电压 V */
+
+    /* 状态: 0=就绪, bit0=编码器异常, bit1=电机异常 */
+    replyframe.status = 0x00;
+
+    /* 时间戳递增 */
+    replyframe.seq++;
+
+    /* 发送数据帧 */
+    send_messages(&replyframe);
+}
+
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 
 

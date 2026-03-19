@@ -8,10 +8,10 @@ typedef struct
     uint16_t head;   // 0x0721 代表上行
     uint8_t id;     // 电机 ID
     float velocity; // 当前速度
+    float output;   // 当前控制输出（占空比）
     float position; // 转子当前位置
-    float current;  // 电机电流
     float voltage;  // 电机电压
-    uint8_t status; // 0：就绪 0b1:编码器异常 0b10:电机异常 0b100: onanii wanted
+    uint8_t status; // 0：就绪 0b1:编码器异常 0b10:电机异常
     uint8_t seq;    // 时间戳
     uint8_t crc8;   // 校验位
 } ReplyFrame; 

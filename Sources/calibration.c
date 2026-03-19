@@ -130,23 +130,31 @@ static float Calibration_GetHarmonicError(float mechanical_rad)
     return harmonic_error;
 }
 
-void Motor_Calibration_Init(int pole_pairs)
+void Motor_Calibration_Init(const Motor_Calibration *calib)
 {
-    g_motor_cal.pole_pairs = pole_pairs;
-    g_motor_cal.dir = 1;
-    g_motor_cal.electrical_offset_rad = 0.0f;
-
-    /* 谐波补偿暂未启用，全部清零 */
-    g_motor_cal.harmonic_amp_1 = 0.0f;
-    g_motor_cal.harmonic_phase_1 = 0.0f;
-    g_motor_cal.harmonic_amp_2 = 0.0f;
-    g_motor_cal.harmonic_phase_2 = 0.0f;
+    if (calib != NULL)
+    {
+        /* 使用传入的参数 */
+        g_motor_cal = *calib;
+    }
+    else
+    {
+        /* 使用默认参数 */
+        g_motor_cal.pole_pairs = MOTOR_CALIB_DEFAULT_POLE_PAIRS;
+        g_motor_cal.dir = 1;
+        g_motor_cal.electrical_offset_rad = 0.0f;
+        g_motor_cal.harmonic_amp_1 = 0.0f;
+        g_motor_cal.harmonic_phase_1 = 0.0f;
+        g_motor_cal.harmonic_amp_2 = 0.0f;
+        g_motor_cal.harmonic_phase_2 = 0.0f;
+    }
 
     Calibration_UpdateRuntimeCache();
 }
 
-void Motor_Calibration_AutoCalibrate(void)
+Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
 {
+    Motor_Calibration result;
     float sum_diff;
     float sum_diff_sq;
     float sum_sin_1;
@@ -176,10 +184,19 @@ void Motor_Calibration_AutoCalibrate(void)
     float overall_confidence;
     float harmonic2_gain;
 
-    if (g_motor_cal.pole_pairs <= 0)
+    /* 初始化结果为默认值 */
+    result.pole_pairs = pole_pairs;
+    result.dir = 1;
+    result.electrical_offset_rad = 0.0f;
+    result.harmonic_amp_1 = 0.0f;
+    result.harmonic_phase_1 = 0.0f;
+    result.harmonic_amp_2 = 0.0f;
+    result.harmonic_phase_2 = 0.0f;
+
+    if (pole_pairs <= 0)
     {
-        printf("[CAL] invalid pole_pairs=%d\n", g_motor_cal.pole_pairs);
-        return;
+        printf("[CAL] invalid pole_pairs=%d\n", pole_pairs);
+        return result;
     }
 
     printf("[CAL] start align...\n");
@@ -199,23 +216,23 @@ void Motor_Calibration_AutoCalibrate(void)
         delay_ms(CALIB_STEP_DELAY_MS);
         theta += CALIB_STEP_RAD;
     }
-    
-    // 等待电机停稳
+
+    /* 等待电机停稳 */
     delay_ms(500);
     Encoder_Update();
     end_mech = Encoder_Get_Angle();
-    
-    // 计算位移差（处理跨越0点的情况）
+
+    /* 计算位移差（处理跨越0点的情况） */
     mech_delta = end_mech - start_mech;
     if (mech_delta > CALIB_TWO_PI / 2.0f) mech_delta -= CALIB_TWO_PI;
     if (mech_delta < -CALIB_TWO_PI / 2.0f) mech_delta += CALIB_TWO_PI;
-    
+
     if (mech_delta < 0.0f) {
-        g_motor_cal.dir = -1;
+        result.dir = -1;
     } else {
-        g_motor_cal.dir = 1;
+        result.dir = 1;
     }
-    printf("[CAL] dir=%d\n", g_motor_cal.dir);
+    printf("[CAL] dir=%d\n", result.dir);
 
     /* 3) 扫完整机械一圈，拟合编码器偏心导致的一次/二次机械谐波 */
     sum_diff = 0.0f;
@@ -226,7 +243,7 @@ void Motor_Calibration_AutoCalibrate(void)
     sum_cos_2 = 0.0f;
     sample_count = 0;
     theta = 0.0f;
-    theta_end = CALIB_TWO_PI * (float)g_motor_cal.pole_pairs;
+    theta_end = CALIB_TWO_PI * (float)pole_pairs;
 
     while (theta <= theta_end)
     {
@@ -235,7 +252,11 @@ void Motor_Calibration_AutoCalibrate(void)
 
         Encoder_Update();
         mech_rad = Encoder_Get_Angle();
-        elec_raw = Calibration_GetElectricalRaw(mech_rad);
+
+        /* 使用临时计算的电角度（基于已检测的方向） */
+        elec_raw = mech_rad * (float)result.dir * (float)pole_pairs;
+        while (elec_raw < 0.0f) elec_raw += CALIB_TWO_PI;
+        while (elec_raw >= CALIB_TWO_PI) elec_raw -= CALIB_TWO_PI;
 
         diff = Calibration_Normalize_pm_pi(elec_raw - theta);
         sum_diff += diff;
@@ -257,11 +278,11 @@ void Motor_Calibration_AutoCalibrate(void)
         coef_sin_2 = 2.0f * sum_sin_2 / (float)sample_count;
         coef_cos_2 = 2.0f * sum_cos_2 / (float)sample_count;
 
-        g_motor_cal.electrical_offset_rad = mean_diff;
-        g_motor_cal.harmonic_amp_1 = (float)sqrt((double)(coef_sin_1 * coef_sin_1 + coef_cos_1 * coef_cos_1));
-        g_motor_cal.harmonic_phase_1 = (float)atan2((double)coef_cos_1, (double)coef_sin_1);
-        g_motor_cal.harmonic_amp_2 = (float)sqrt((double)(coef_sin_2 * coef_sin_2 + coef_cos_2 * coef_cos_2));
-        g_motor_cal.harmonic_phase_2 = (float)atan2((double)coef_cos_2, (double)coef_sin_2);
+        result.electrical_offset_rad = mean_diff;
+        result.harmonic_amp_1 = (float)sqrt((double)(coef_sin_1 * coef_sin_1 + coef_cos_1 * coef_cos_1));
+        result.harmonic_phase_1 = (float)atan2((double)coef_cos_1, (double)coef_sin_1);
+        result.harmonic_amp_2 = (float)sqrt((double)(coef_sin_2 * coef_sin_2 + coef_cos_2 * coef_cos_2));
+        result.harmonic_phase_2 = (float)atan2((double)coef_cos_2, (double)coef_sin_2);
 
         var_residual = sum_diff_sq / (float)sample_count - mean_diff * mean_diff;
         if (var_residual < 0.0f)
@@ -269,8 +290,8 @@ void Motor_Calibration_AutoCalibrate(void)
             var_residual = 0.0f;
         }
 
-        reduction_h1 = 0.5f * g_motor_cal.harmonic_amp_1 * g_motor_cal.harmonic_amp_1;
-        reduction_h2 = 0.5f * g_motor_cal.harmonic_amp_2 * g_motor_cal.harmonic_amp_2;
+        reduction_h1 = 0.5f * result.harmonic_amp_1 * result.harmonic_amp_1;
+        reduction_h2 = 0.5f * result.harmonic_amp_2 * result.harmonic_amp_2;
 
         rms_offset_only = (float)sqrt((double)var_residual);
 
@@ -294,17 +315,17 @@ void Motor_Calibration_AutoCalibrate(void)
 
         if (rms_h1 >= rms_offset_only)
         {
-            g_motor_cal.harmonic_amp_1 = 0.0f;
-            g_motor_cal.harmonic_phase_1 = 0.0f;
+            result.harmonic_amp_1 = 0.0f;
+            result.harmonic_phase_1 = 0.0f;
             rms_h1 = rms_offset_only;
             rms_h2 = rms_offset_only;
-            g_motor_cal.harmonic_amp_2 = 0.0f;
-            g_motor_cal.harmonic_phase_2 = 0.0f;
+            result.harmonic_amp_2 = 0.0f;
+            result.harmonic_phase_2 = 0.0f;
         }
         else if (rms_h2 >= rms_h1)
         {
-            g_motor_cal.harmonic_amp_2 = 0.0f;
-            g_motor_cal.harmonic_phase_2 = 0.0f;
+            result.harmonic_amp_2 = 0.0f;
+            result.harmonic_phase_2 = 0.0f;
             rms_h2 = rms_h1;
         }
 
@@ -336,17 +357,17 @@ void Motor_Calibration_AutoCalibrate(void)
         }
 
         printf("[CAL] done, elec_offset=%.4f rad (%.2f deg), N=%d\n",
-               g_motor_cal.electrical_offset_rad,
-               g_motor_cal.electrical_offset_rad * CALIB_RAD_TO_DEG,
+               result.electrical_offset_rad,
+               result.electrical_offset_rad * CALIB_RAD_TO_DEG,
                sample_count);
         printf("[CAL] h1 amp=%.4f rad (%.2f deg), phase=%.2f deg\n",
-               g_motor_cal.harmonic_amp_1,
-               g_motor_cal.harmonic_amp_1 * CALIB_RAD_TO_DEG,
-               g_motor_cal.harmonic_phase_1 * CALIB_RAD_TO_DEG);
+               result.harmonic_amp_1,
+               result.harmonic_amp_1 * CALIB_RAD_TO_DEG,
+               result.harmonic_phase_1 * CALIB_RAD_TO_DEG);
         printf("[CAL] h2 amp=%.4f rad (%.2f deg), phase=%.2f deg\n",
-               g_motor_cal.harmonic_amp_2,
-               g_motor_cal.harmonic_amp_2 * CALIB_RAD_TO_DEG,
-               g_motor_cal.harmonic_phase_2 * CALIB_RAD_TO_DEG);
+               result.harmonic_amp_2,
+               result.harmonic_amp_2 * CALIB_RAD_TO_DEG,
+               result.harmonic_phase_2 * CALIB_RAD_TO_DEG);
         printf("[CAL] rms: offset=%.2f deg, h1=%.2f deg, h1+h2=%.2f deg\n",
                rms_offset_only * CALIB_RAD_TO_DEG,
                rms_h1 * CALIB_RAD_TO_DEG,
@@ -357,18 +378,32 @@ void Motor_Calibration_AutoCalibrate(void)
     }
     else
     {
-        g_motor_cal.electrical_offset_rad = 0.0f;
-        g_motor_cal.harmonic_amp_1 = 0.0f;
-        g_motor_cal.harmonic_phase_1 = 0.0f;
-        g_motor_cal.harmonic_amp_2 = 0.0f;
-        g_motor_cal.harmonic_phase_2 = 0.0f;
+        result.electrical_offset_rad = 0.0f;
+        result.harmonic_amp_1 = 0.0f;
+        result.harmonic_phase_1 = 0.0f;
+        result.harmonic_amp_2 = 0.0f;
+        result.harmonic_phase_2 = 0.0f;
         printf("[CAL] failed, use offset=0\n");
     }
 
-    Calibration_UpdateRuntimeCache();
-
     /* 停止输出，避免持续发热 */
     SVPWM_Update(0.0f, 0.0f);
+
+    return result;
+}
+
+void Motor_Calibration_Apply(const Motor_Calibration *calib)
+{
+    if (calib != NULL)
+    {
+        g_motor_cal = *calib;
+        Calibration_UpdateRuntimeCache();
+    }
+}
+
+const Motor_Calibration* Motor_Calibration_GetCurrent(void)
+{
+    return &g_motor_cal;
 }
 
 float Motor_Calibration_GetElectricalAngle(float mechanical_rad)
@@ -392,39 +427,3 @@ float Motor_Calibration_GetMechanicalAngle(float mechanical_rad)
 
     return Calibration_Normalize_MechanicalFast(mech);
 }
-
-float Motor_Calibration_GetElectricalOffset(void)
-{
-    return g_motor_cal.electrical_offset_rad;
-}
-
-float Motor_Calibration_GetHarmonicAmp1(void)
-{
-    return g_motor_cal.harmonic_amp_1;
-}
-
-float Motor_Calibration_GetHarmonicPhase1(void)
-{
-    return g_motor_cal.harmonic_phase_1;
-}
-
-float Motor_Calibration_GetHarmonicAmp2(void)
-{
-    return g_motor_cal.harmonic_amp_2;
-}
-
-float Motor_Calibration_GetHarmonicPhase2(void)
-{
-    return g_motor_cal.harmonic_phase_2;
-}
-
-int Motor_Calibration_GetDirection(void)
-{
-    return g_motor_cal.dir;
-}
-
-int Motor_Calibration_GetPolePairs(void)
-{
-    return g_motor_cal.pole_pairs;
-}
-

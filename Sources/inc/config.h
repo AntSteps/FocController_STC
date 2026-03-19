@@ -48,6 +48,7 @@
 #include "adc.h"
 #include "spi.h"
 #include "pwm.h"
+#include "iap.h"
 #include "mathlib.h"
 
 void SYS_Init(void);

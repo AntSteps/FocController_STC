@@ -18,6 +18,9 @@
 void ADC_Init(void);
 uint16_t ADC_Convert(uint8_t ch);
 
+float ADC_GetBusVoltage(void);
+uint16_t ADC_GetBusVoltageRaw(void);
+
 extern BOOL fADCConverted;
 
 
