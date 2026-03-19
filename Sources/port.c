@@ -124,8 +124,9 @@ void PORT3_Init(void)
 void PORT5_Init(void)
 {
     SetP5nInitLevelHigh(PIN_ALL);       //设置P5初始化电平
-    SetP5nQuasiMode(PIN_7 | PIN_6 | PIN_5 | PIN_4 | PIN_1 | PIN_0); //设置P5.7,P5.6,P5.5,P5.4,P5.1,P5.0为准双向口模式
-    SetP5nPushPullMode(PIN_3 | PIN_2);  //设置P5.3,P5.2为推挽输出模式
+    SetP5nQuasiMode(PIN_7 | PIN_6 | PIN_5 | PIN_4); //设置P5.7,P5.6,P5.5,P5.4为准双向口模式
+    SetP5nPushPullMode(PIN_3 | PIN_2 | PIN_1);  //设置P5.3,P5.2,P5.1为推挽输出模式
+    SetP5nHighZInputMode(PIN_0);       //设置P5.0为高阻输入模式
 
     DisableP5nPullUp(PIN_ALL);          //关闭P5内部上拉电阻
     DisableP5nPullDown(PIN_ALL);        //关闭P5内部下拉电阻

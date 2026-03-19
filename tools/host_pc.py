@@ -21,7 +21,7 @@ CMD_FRAME_HEAD = 0x1145
 REPLY_FRAME_FORMAT = '>H B f f f f B B B'  # 大端: H=uint16, B=uint8, f=float
 REPLY_FRAME_SIZE = struct.calcsize(REPLY_FRAME_FORMAT)
 
-# CRC8 校验表 (与 STC 端一致，使用标准 CRC-8)
+# CRC8 校验，与 STC 端 crc8.c 一致，多项式 0x07
 def crc8_check(data: bytes, has_crc: int = 0) -> int:
     """
     计算 CRC8 校验值
@@ -36,10 +36,9 @@ def crc8_check(data: bytes, has_crc: int = 0) -> int:
         crc ^= data[i]
         for _ in range(8):
             if crc & 0x80:
-                crc = (crc << 1) ^ 0x31  # 标准 CRC-8 多项式 x^8 + x^5 + x^4 + 1
+                crc = ((crc << 1) ^ 0x07) & 0xFF
             else:
-                crc <<= 1
-            crc &= 0xFF
+                crc = (crc << 1) & 0xFF
 
     return crc
 
@@ -92,7 +91,7 @@ def parse_status(status: int) -> str:
 class FOCMonitor:
     """FOC 控制器监控器"""
 
-    def __init__(self, port: str, baudrate: int = 1000000):
+    def __init__(self, port: str, baudrate: int = 500000):
         self.port = port
         self.baudrate = baudrate
         self.serial = None
@@ -280,7 +279,7 @@ def main():
             sys.exit(1)
         port = ports[0]
 
-    baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else 1000000
+    baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else 500000
 
     # 创建并运行监控器
     monitor = FOCMonitor(port, baudrate)

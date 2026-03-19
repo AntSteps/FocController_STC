@@ -35,7 +35,7 @@ void Motor_Update(void)
     }
 
     // 更新SVPWM，使用速度环输出的Q轴电压
-    SVPWM_UpdateQAxis(elec_angle, s_q_axis_voltage);
+    SVPWM_UpdateQAxis(elec_angle, 0.5);
 }
 
 // 获取当前缓存的机械角度（供其他模块使用）

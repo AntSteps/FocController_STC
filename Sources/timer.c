@@ -56,7 +56,7 @@ void TIMER3_Init(void)
 #ifdef BAUDRATE
 #undef BAUDRATE
 #endif
-#define BAUDRATE (1000000)
+#define BAUDRATE (500000)
 #define T3_RELOAD (65536 - (SYSCLK / BAUDRATE + 2) / 4)
 
     TIMER3_TimerMode();            // 设置定时器3为定时模式

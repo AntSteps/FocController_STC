@@ -10,23 +10,24 @@
 #define __UART_H__
 
 
+#define UART3_TX_DMA_BUFFER_SIZE    22
+#define UART3_RX_DMA_BUFFER_SIZE    18
+#define UART3_RX_BUFFER_COUNT       2
+
+
 //<<AICUBE_USER_DEFINE_BEGIN>>
 void UART_DMA_Send(uint8_t *pData, uint8_t len);
-void UART_DMA_Receive(uint8_t *pData, uint8_t len);
-void Write_RXD_Buffer(uint8_t *dat, uint8_t len);
+uint8_t xdata *UART_GetRxBuffer(uint8_t *len);
+void UART_ReleaseRxBuffer(void);
 //<<AICUBE_USER_DEFINE_END>>
 
 
 void UART3_Init(void);
 
-extern uint8_t xdata pu8UR3DMATxBuffer[22];
-extern uint8_t xdata pu8UR3DMARxBuffer[18];
+extern uint8_t xdata pu8UR3DMATxBuffer[UART3_TX_DMA_BUFFER_SIZE];
 
 
 //<<AICUBE_USER_EXTERNAL_DECLARE_BEGIN>>
-extern uint8_t rxd_buf[18 * 5];    //串口接收缓冲区数组
-extern uint8_t write_ptr;          //循环数组的当前索引 // FIXME: uint8_t注意下
-extern uint8_t read_ptr;           //循环数组的读取索引
 //<<AICUBE_USER_EXTERNAL_DECLARE_END>>
 
 

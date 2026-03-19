@@ -4,9 +4,10 @@
 #include "config.h"
 
 void send_messages(ReplyFrame *frame);
-uint8_t receive_messages(CmdFrame *frame);
+uint8_t UARTController_GetCommand(UartCommand *command);
 
 extern CmdFrame cmdframe;
+extern ParamCmdFrame paramcmdframe;
 extern ReplyFrame replyframe;
 
 #endif // __UART_CONTROLLER_H__

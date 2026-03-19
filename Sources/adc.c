@@ -122,7 +122,7 @@ void ADC_ISR(void) interrupt ADC_VECTOR
 ////////////////////////////////////////
 float ADC_GetBusVoltage(void)
 {
-    return s_busVoltage;
+    return ADC_ReadResult() * VIN_SCALE_FACTOR;
 }
 
 ////////////////////////////////////////

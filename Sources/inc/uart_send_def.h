@@ -2,6 +2,29 @@
 #define __UART_SEND_DEF_H__
 #include "def.h"
 
+#define REPLY_FRAME_HEAD            0x0721
+#define CTRL_CMD_FRAME_HEAD         0x1145
+#define PARAM_CMD_FRAME_HEAD        0x1245
+
+#define CTRL_CMD_HEAD_BYTE0         0x11
+#define CTRL_CMD_HEAD_BYTE1         0x45
+#define PARAM_CMD_HEAD_BYTE0        0x12
+#define PARAM_CMD_HEAD_BYTE1        0x45
+
+#define PARAM_CMD_ID_VEL_KP         0x01
+#define PARAM_CMD_ID_VEL_KI         0x02
+#define PARAM_CMD_ID_VEL_LIMIT      0x03
+#define PARAM_CMD_ID_CUR_LIMIT      0x04
+#define PARAM_CMD_ID_FF_GAIN        0x05
+#define PARAM_CMD_ID_FF_ENABLE      0x06
+
+typedef enum
+{
+    UART_COMMAND_NONE = 0,
+    UART_COMMAND_CTRL = 1,
+    UART_COMMAND_PARAM = 2
+} UartCommandType;
+
 #pragma pack(1)
 typedef struct
 {
@@ -29,4 +52,23 @@ typedef struct
     uint8_t crc8; // 校验位
 } CmdFrame;
 #pragma pack()
+
+#pragma pack(1)
+typedef struct
+{
+    uint16_t head;   // 0x1245 代表参数下发
+    uint8_t id;      // 电机 ID
+    uint8_t param;   // 参数 ID
+    float value;     // 参数值
+    uint8_t seq;     // 时间戳
+    uint8_t crc8;    // 校验位
+} ParamCmdFrame;
+#pragma pack()
+
+typedef struct
+{
+    UartCommandType type;
+    CmdFrame ctrl;
+    ParamCmdFrame param;
+} UartCommand;
 #endif

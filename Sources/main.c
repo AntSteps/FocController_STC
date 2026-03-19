@@ -30,6 +30,8 @@
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
 
 void ReplyFrame_Assemble(void);
+static void ProcessCommand(UartCommand *command);
+static void ApplyParamCommand(ParamCmdFrame *frame);
 
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
@@ -42,6 +44,7 @@ void ReplyFrame_Assemble(void);
 ////////////////////////////////////////
 void main(void)
 {
+    UartCommand command;
     ParamStorage_Data_t *params;
     Motor_Calibration new_calib;
     /* 速度环参数结构体，静态存储保证生命周期，C89需在声明时初始化 */
@@ -60,13 +63,13 @@ void main(void)
 
     //<<AICUBE_USER_MAIN_CODE_BEGIN>>
     // 在此添加主函数中运行一次的用户代码
-    DMA_UART3_TriggerRx(); /* 串口3触发dma */
-
     Encoder_Init();
     ParamStorage_Init();                /* 初始化参数存储，从EEPROM加载参数 */
 
     /* 从参数存储获取指针 */
     params = ParamStorage_Get();
+    speed_ctrl_params.kp = params->vel_kp;
+    speed_ctrl_params.ki = params->vel_ki;
 
     TIMER0_Stop();
 
@@ -90,12 +93,16 @@ void main(void)
     SpeedController_SetTarget(20.0f);
 
     TIMER0_Run();       /* 定时器接管闭环控制 */
-    printf("Hello World !\n");
+    // printf("Hello World !\n");
     /*<<AICUBE_USER_MAIN_CODE_END>>*/
 
     while (1)
     {
         /*<AICUBE_USER_MAIN_LOOP_BEGIN>*/
+        // while (UARTController_GetCommand(&command) == 0)
+        // {
+        //     ProcessCommand(&command);
+        // }
         ReplyFrame_Assemble();
         delay_ms(10);  /* 100Hz 发送频率 */
         //<<AICUBE_USER_MAIN_LOOP_END>>
@@ -185,7 +192,7 @@ void delay_ms(uint16_t ms)
 void ReplyFrame_Assemble(void)
 {
     /* 填充帧头 (大端: 0x07 0x21) */
-    replyframe.head = 0x0721;
+    replyframe.head = REPLY_FRAME_HEAD;
 
     /* 电机ID */
     replyframe.id = 0x01;
@@ -204,6 +211,104 @@ void ReplyFrame_Assemble(void)
 
     /* 发送数据帧 */
     send_messages(&replyframe);
+}
+
+static void ProcessCommand(UartCommand *command)
+{
+    ParamStorage_Data_t *params;
+    float target;
+
+    params = ParamStorage_Get();
+    if (command->type == UART_COMMAND_CTRL)
+    {
+        if (command->ctrl.ctrl == 0)
+        {
+            SpeedController_SetTarget(0.0f);
+            return;
+        }
+
+        if (command->ctrl.ctrl == 1)
+        {
+            target = command->ctrl.target;
+            if (target > params->velocity_limit)
+            {
+                target = params->velocity_limit;
+            }
+            else if (target < -params->velocity_limit)
+            {
+                target = -params->velocity_limit;
+            }
+            SpeedController_SetTarget(target);
+        }
+        return;
+    }
+
+    if (command->type == UART_COMMAND_PARAM)
+    {
+        ApplyParamCommand(&command->param);
+    }
+}
+
+static void ApplyParamCommand(ParamCmdFrame *frame)
+{
+    ParamStorage_Data_t *params;
+
+    params = ParamStorage_Get();
+    switch (frame->param)
+    {
+    case PARAM_CMD_ID_VEL_KP:
+        params->vel_kp = frame->value;
+        if (g_speed_ctrl.params != NULL)
+        {
+            g_speed_ctrl.params->kp = frame->value;
+            PI_Init(&g_speed_ctrl.pi,
+                    g_speed_ctrl.params->kp,
+                    g_speed_ctrl.params->ki,
+                    g_speed_ctrl.params->out_max,
+                    g_speed_ctrl.params->out_min);
+        }
+        break;
+
+    case PARAM_CMD_ID_VEL_KI:
+        params->vel_ki = frame->value;
+        if (g_speed_ctrl.params != NULL)
+        {
+            g_speed_ctrl.params->ki = frame->value;
+            PI_Init(&g_speed_ctrl.pi,
+                    g_speed_ctrl.params->kp,
+                    g_speed_ctrl.params->ki,
+                    g_speed_ctrl.params->out_max,
+                    g_speed_ctrl.params->out_min);
+        }
+        break;
+
+    case PARAM_CMD_ID_VEL_LIMIT:
+        params->velocity_limit = frame->value;
+        break;
+
+    case PARAM_CMD_ID_CUR_LIMIT:
+        params->current_limit = frame->value;
+        break;
+
+    case PARAM_CMD_ID_FF_GAIN:
+        if (g_speed_ctrl.params != NULL)
+        {
+            g_speed_ctrl.params->ff.velocity_gain = frame->value;
+        }
+        break;
+
+    case PARAM_CMD_ID_FF_ENABLE:
+        if (g_speed_ctrl.params != NULL)
+        {
+            g_speed_ctrl.params->enable_feedforward = (uint8_t)(frame->value != 0.0f);
+        }
+        break;
+
+    default:
+        return;
+    }
+
+    ParamStorage_Save();
 }
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
