@@ -24,7 +24,7 @@
 // 母线电压采集配置
 #define ADC_VREF        5.0f            // ADC参考电压(V)
 #define ADC_RESOLUTION  4096.0f         // 12位ADC分辨率
-#define VIN_DIVIDER_R1  10000.0f        // 分压电阻R9 (10K)
+#define VIN_DIVIDER_R1  30000.0f        // 分压电阻R9 (10K)
 #define VIN_DIVIDER_R2  10000.0f        // 分压电阻R12 (10K)
 
 // 计算母线电压系数: Vref / 4096 * (R1+R2)/R2

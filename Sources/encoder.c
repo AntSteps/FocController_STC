@@ -5,6 +5,7 @@
 
 static float data angle = 0.0f;
 static uint8_t data datagood = 0;
+static uint8_t data mag_status = 0;
 
 void Encoder_Init(void)
 {
@@ -38,6 +39,7 @@ float Encoder_UpdateAndGetAngle(void)
     {
         raw_angle = ((uint16_t)b1 << 6) | ((uint16_t)b2 >> 2);
         angle = (float)raw_angle * ENCODER_ANGLE_SCALE;
+        mag_status = ((b2 & 0x03) << 2) | (b3 >> 6);
     }
 
     return angle;
@@ -51,4 +53,24 @@ uint8_t Encoder_Get_DataGood(void)
 float Encoder_Get_Angle(void)
 {
     return angle;
+}
+
+uint8_t Encoder_Get_MagStatus(void)
+{
+    return mag_status;
+}
+
+uint8_t Encoder_Get_MagFieldStatus(void)
+{
+    return mag_status & 0x03;
+}
+
+uint8_t Encoder_Get_PressStatus(void)
+{
+    return (mag_status >> 2) & 0x01;
+}
+
+uint8_t Encoder_Get_SpeedStatus(void)
+{
+    return (mag_status >> 3) & 0x01;
 }
