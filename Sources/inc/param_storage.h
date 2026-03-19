@@ -1,19 +1,9 @@
-//<<AICUBE_USER_HEADER_REMARK_BEGIN>>
-////////////////////////////////////////
-// 文件名称: param_storage.h
-// 文件描述: 参数持久化管理模块头文件
-// 文件版本: V1.0
-// 修改记录:
-//   1. (2026-03-17) 创建文件
-////////////////////////////////////////
-//<<AICUBE_USER_HEADER_REMARK_END>>
-
-
 #ifndef __PARAM_STORAGE_H__
 #define __PARAM_STORAGE_H__
 
 
 #include "def.h"
+#include "control.h"
 #include "calibration.h"
 
 
@@ -24,7 +14,7 @@
 #define PARAM_STORAGE_MAGIC         0x5A5A
 
 // 参数版本号，数据结构改变时需要更新
-#define PARAM_STORAGE_VERSION       0x0001
+#define PARAM_STORAGE_VERSION       0x0002
 
 
 ////////////////////////////////////////
@@ -36,25 +26,23 @@ typedef struct {
     uint16 magic;
     uint16 version;
 
-    // 电机参数
-    uint8  motor_pole_pairs;            // 电机极对数
-    float  motor_phase_resistance;      // 相电阻(欧姆)
-    float  motor_phase_inductance;      // 相电感(H)
+    // 电机基础参数
+    int16 motor_pole_pairs;
+    float motor_phase_resistance;
+    float motor_phase_inductance;
 
-    // 电流环PID参数
-    float  cur_kp;                      // 电流环P
-    float  cur_ki;                      // 电流环I
+    // 电流环参数
+    float cur_kp;
+    float cur_ki;
 
-    // 速度环PID参数
-    float  vel_kp;                      // 速度环P
-    float  vel_ki;                      // 速度环I
+    SpeedController_Params_t speed_ctrl_params;   /* 速度环参数 */
 
-    // 限制参数
-    float  current_limit;               // 电流限制(A)
-    float  velocity_limit;              // 速度限制(rad/s)
+    // 运行限制参数
+    float current_limit;
+    float velocity_limit;
 
-    // 编码器校准参数
-    int16  encoder_offset;              // 编码器零偏
+    // 编码器参数
+    int16 encoder_offset;
 
     // 电机校准参数（包含offset和谐波补偿参数）
     Motor_Calibration motor_calib;
@@ -63,6 +51,7 @@ typedef struct {
     uint8  crc8;
 
 } ParamStorage_Data_t;
+
 
 
 ////////////////////////////////////////
