@@ -34,6 +34,23 @@ uint8_t xdata pu8UR3DMATxBuffer[UART3_TX_DMA_BUFFER_SIZE];    //串口3DMA发送
 #define UART3_VECTOR 17
 #endif
 
+static uint8_t UART3_TryLockTx(void)
+{
+    uint8_t ea_state;
+
+    ea_state = EA;
+    DisableGlobalInt();
+    if (!s_uart3_tx_ready)
+    {
+        EA = ea_state;
+        return 0;
+    }
+
+    s_uart3_tx_ready = 0;
+    EA = ea_state;
+    return 1;
+}
+
 static void UART3_RestartRx(uint8_t next_index)
 {
     DMA_UART3_ClearRxFlag();
@@ -160,6 +177,7 @@ void DMA_UART3TX_ISR(void) interrupt DMA_UR3T_VECTOR
     if (DMA_UART3_CheckTxFlag())        //判断串口发送DMA中断
     {
         DMA_UART3_ClearTxFlag();        //清除串口发送DMA中断标志
+        s_uart3_tx_ready = 1;
     }
     //<<AICUBE_USER_UART3_ISR_CODE2_END>>
 }
@@ -184,7 +202,6 @@ void UART3_ISR(void) interrupt UART3_VECTOR
     if (UART3_CheckTxFlag())
     {
         UART3_ClearTxFlag();
-        s_uart3_tx_ready = 1;
     }
 
     if (UART3_CheckTimeoutFlag())
@@ -223,15 +240,29 @@ void UART_ReleaseRxBuffer(void)
 }
 
 //! 在改变dma数组的时候注意修改len的值
-void UART_DMA_Send(uint8_t *pData, uint8_t len)
+uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len)
 {
-    if(len > UART3_TX_DMA_BUFFER_SIZE) len = UART3_TX_DMA_BUFFER_SIZE;
-    if (!DMA_UART3_CheckTxFlag())
+    if ((pData == (const uint8_t *)0) || (len == 0))
     {
-        memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
-        memcpy(pu8UR3DMATxBuffer, pData, len);
-        DMA_UART3_TriggerTx();
+        return 0;
     }
+
+    if (len > UART3_TX_DMA_BUFFER_SIZE)
+    {
+        len = UART3_TX_DMA_BUFFER_SIZE;
+    }
+
+    if (!UART3_TryLockTx())
+    {
+        return 0;
+    }
+
+    memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
+    memcpy(pu8UR3DMATxBuffer, pData, len);
+    DMA_UART3_ClearTxFlag();
+    DMA_UART3_TriggerTx();
+
+    return 1;
 }
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 

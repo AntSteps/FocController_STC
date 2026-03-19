@@ -3,7 +3,7 @@
 #include "uart_send_def.h"
 #include "crc8.h"
 
-CmdFrame cmdframe = {0};
+CtrlCmdFrame cmdframe = {0};
 ParamCmdFrame paramcmdframe = {0};
 ReplyFrame replyframe = {0};
 
@@ -46,7 +46,7 @@ static void UARTController_WriteFloatBE(uint8_t *buf, float value)
     // buf[3] = raw[0];
 }
 
-void send_messages(ReplyFrame *frame)
+uint8_t send_messages(ReplyFrame *frame)
 {
     uint8_t tx_frame[sizeof(ReplyFrame)];
 
@@ -61,7 +61,7 @@ void send_messages(ReplyFrame *frame)
     tx_frame[21] = Mem_CRC8_Check(tx_frame, sizeof(ReplyFrame) - 1, 0);
 
     frame->crc8 = tx_frame[21];
-    UART_DMA_Send(tx_frame, sizeof(ReplyFrame));
+    return UART_DMA_Send(tx_frame, sizeof(ReplyFrame));
 }
 
 uint8_t UARTController_GetCommand(UartCommand *command)
@@ -84,14 +84,14 @@ uint8_t UARTController_GetCommand(UartCommand *command)
         remain = (uint8_t)(s_rx_length - s_rx_offset);
         frame_ptr = s_rx_buffer + s_rx_offset;
 
-        if ((remain >= sizeof(CmdFrame)) &&
+        if ((remain >= sizeof(CtrlCmdFrame)) &&
             UARTController_MatchHead(frame_ptr, CTRL_CMD_HEAD_BYTE0, CTRL_CMD_HEAD_BYTE1) &&
-            UARTController_CheckFrame(frame_ptr, sizeof(CmdFrame)))
+            UARTController_CheckFrame(frame_ptr, sizeof(CtrlCmdFrame)))
         {
-            cmdframe = *(CmdFrame *)frame_ptr;
+            cmdframe = *(CtrlCmdFrame *)frame_ptr;
             command->type = UART_COMMAND_CTRL;
             command->ctrl = cmdframe;
-            s_rx_offset = (uint8_t)(s_rx_offset + sizeof(CmdFrame));
+            s_rx_offset = (uint8_t)(s_rx_offset + sizeof(CtrlCmdFrame));
             if (s_rx_offset >= s_rx_length)
             {
                 UARTController_ReleaseCurrentBuffer();

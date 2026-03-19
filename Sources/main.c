@@ -1,17 +1,5 @@
-//<<AICUBE_USER_HEADER_REMARK_BEGIN>>
-////////////////////////////////////////
-// 在此添加用户文件头说明信息
-// 文件名称: main.c
-// 文件描述:
-// 文件版本: V1.0
-// 修改记录:
-//   1. (2026-03-06) 创建文件
-////////////////////////////////////////
-//<<AICUBE_USER_HEADER_REMARK_END>>
-
 
 #include "config.h"                     //默认已包含stdio.h、intrins.h等头文件
-
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
 // 在此添加用户头文件包含
@@ -23,41 +11,40 @@
 #include "control.h"
 #include "uart_send_def.h"
 #include "uart_controller.h"
+#include "command.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
 
-void ReplyFrame_Assemble(void);
-static void ProcessCommand(UartCommand *command);
-static void ApplyParamCommand(ParamCmdFrame *frame);
-
-//<<AICUBE_USER_GLOBAL_DEFINE_END>>
+static void LoadStoredParamsToModules(ParamStorage_Data_t *params);
 
 
+void calibrate(void){
+    ParamStorage_Data_t *params;
+    Motor_Calibration new_calib;
 
-////////////////////////////////////////
-// 项目主函数
-// 入口参数: 无
-// 函数返回: 无
-////////////////////////////////////////
+    /* 从参数存储获取指针 */
+    params = ParamStorage_Get();
+
+    /* 执行自动校准，返回校准结果 */
+    new_calib = Motor_Calibration_AutoCalibrate(params->motor_pole_pairs);
+
+    /* 将新的校准结果应用到参数存储 */
+    params->motor_calib = new_calib;
+    ParamStorage_Save();                 /* 保存到EEPROM */
+
+    /* 应用校准参数到运行模块 */
+    Motor_Calibration_Init(&new_calib);
+}
+
+
 void main(void)
 {
     UartCommand command;
     ParamStorage_Data_t *params;
-    Motor_Calibration new_calib;
-    /* 速度环参数结构体，静态存储保证生命周期，C89需在声明时初始化 */
-    static SpeedController_Params_t speed_ctrl_params = {
-        0.001f,         /* kp */
-        0.000f,         /* ki */
-        1.0f,           /* out_max */
-        -1.0f,          /* out_min */
-        5.0f,           /* lpf_time_constant_ms */
-        {0.0f, 0.0f, 0.0f}, /* ff: velocity, acceleration, friction */
-        0,              /* enable_feedforward */
-        300.0f          /* sample_freq_hz */
-    };
+    uint8_t reply_seq;
 
     SYS_Init();
 
@@ -68,44 +55,26 @@ void main(void)
 
     /* 从参数存储获取指针 */
     params = ParamStorage_Get();
-    speed_ctrl_params.kp = params->vel_kp;
-    speed_ctrl_params.ki = params->vel_ki;
 
     TIMER0_Stop();
 
-    /* 用参数存储中的校准数据初始化（如果EEPROM中有有效数据） */
-    Motor_Calibration_Init(&params->motor_calib);
+    /* 将存储参数或默认参数加载到各模块 */
+    LoadStoredParamsToModules(params);
 
-    /* 执行自动校准，返回校准结果 */
-    new_calib = Motor_Calibration_AutoCalibrate(params->motor_pole_pairs);
-
-    /* 将新的校准结果应用到参数存储 */
-    params->motor_calib = new_calib;
-    ParamStorage_Save();                 /* 保存到EEPROM */
-
-    /* 应用校准参数到运行模块 */
-    Motor_Calibration_Apply(&new_calib);
-
-    /* 初始化速度环 */
-    SpeedController_Init(&speed_ctrl_params);
-
-    /* 设置目标速度 (rad/s), 目标100 rad/s (约955 rpm) */
     SpeedController_SetTarget(20.0f);
+    reply_seq = 0;
 
-    TIMER0_Run();       /* 定时器接管闭环控制 */
-    // printf("Hello World !\n");
-    /*<<AICUBE_USER_MAIN_CODE_END>>*/
+    TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
 
     while (1)
     {
-        /*<AICUBE_USER_MAIN_LOOP_BEGIN>*/
-        // while (UARTController_GetCommand(&command) == 0)
-        // {
-        //     ProcessCommand(&command);
-        // }
-        ReplyFrame_Assemble();
-        delay_ms(10);  /* 100Hz 发送频率 */
-        //<<AICUBE_USER_MAIN_LOOP_END>>
+        while (UARTController_GetCommand(&command) == 0)
+        {
+            ProcessCommand(&command);
+        }
+
+        UartReply(reply_seq++);
+        delay_ms(10);
     }
 }
 
@@ -161,8 +130,15 @@ void delay_us(uint16_t us)
     {
         NOP(34);                        //(MAIN_Fosc + 500000) / 1000000 - 6
     } while (--us);
+
 }
 
+
+static void LoadStoredParamsToModules(ParamStorage_Data_t *params)
+{
+    Motor_Calibration_Init(&params->motor_calib);
+    SpeedController_Init(&params->speed_ctrl_params);
+}
 
 ////////////////////////////////////////
 // 毫秒延时函数
@@ -189,127 +165,7 @@ void delay_ms(uint16_t ms)
 // 入口参数: 无
 // 函数返回: 无
 ////////////////////////////////////////
-void ReplyFrame_Assemble(void)
-{
-    /* 填充帧头 (大端: 0x07 0x21) */
-    replyframe.head = REPLY_FRAME_HEAD;
 
-    /* 电机ID */
-    replyframe.id = 0x01;
-
-    /* TODO: 用户在这里填充实际数据，目前使用dummy数据 */
-    replyframe.velocity = 3.14159f;     /* 当前速度 rad/s */
-    replyframe.output = 0.5f;           /* 控制输出/占空比 */
-    replyframe.position = 1.234f;       /* 转子位置 rad */
-    replyframe.voltage = ADC_GetBusVoltage();  /* 母线电压 V */
-
-    /* 状态: 0=就绪, bit0=编码器异常, bit1=电机异常 */
-    replyframe.status = 0x00;
-
-    /* 时间戳递增 */
-    replyframe.seq++;
-
-    /* 发送数据帧 */
-    send_messages(&replyframe);
-}
-
-static void ProcessCommand(UartCommand *command)
-{
-    ParamStorage_Data_t *params;
-    float target;
-
-    params = ParamStorage_Get();
-    if (command->type == UART_COMMAND_CTRL)
-    {
-        if (command->ctrl.ctrl == 0)
-        {
-            SpeedController_SetTarget(0.0f);
-            return;
-        }
-
-        if (command->ctrl.ctrl == 1)
-        {
-            target = command->ctrl.target;
-            if (target > params->velocity_limit)
-            {
-                target = params->velocity_limit;
-            }
-            else if (target < -params->velocity_limit)
-            {
-                target = -params->velocity_limit;
-            }
-            SpeedController_SetTarget(target);
-        }
-        return;
-    }
-
-    if (command->type == UART_COMMAND_PARAM)
-    {
-        ApplyParamCommand(&command->param);
-    }
-}
-
-static void ApplyParamCommand(ParamCmdFrame *frame)
-{
-    ParamStorage_Data_t *params;
-
-    params = ParamStorage_Get();
-    switch (frame->param)
-    {
-    case PARAM_CMD_ID_VEL_KP:
-        params->vel_kp = frame->value;
-        if (g_speed_ctrl.params != NULL)
-        {
-            g_speed_ctrl.params->kp = frame->value;
-            PI_Init(&g_speed_ctrl.pi,
-                    g_speed_ctrl.params->kp,
-                    g_speed_ctrl.params->ki,
-                    g_speed_ctrl.params->out_max,
-                    g_speed_ctrl.params->out_min);
-        }
-        break;
-
-    case PARAM_CMD_ID_VEL_KI:
-        params->vel_ki = frame->value;
-        if (g_speed_ctrl.params != NULL)
-        {
-            g_speed_ctrl.params->ki = frame->value;
-            PI_Init(&g_speed_ctrl.pi,
-                    g_speed_ctrl.params->kp,
-                    g_speed_ctrl.params->ki,
-                    g_speed_ctrl.params->out_max,
-                    g_speed_ctrl.params->out_min);
-        }
-        break;
-
-    case PARAM_CMD_ID_VEL_LIMIT:
-        params->velocity_limit = frame->value;
-        break;
-
-    case PARAM_CMD_ID_CUR_LIMIT:
-        params->current_limit = frame->value;
-        break;
-
-    case PARAM_CMD_ID_FF_GAIN:
-        if (g_speed_ctrl.params != NULL)
-        {
-            g_speed_ctrl.params->ff.velocity_gain = frame->value;
-        }
-        break;
-
-    case PARAM_CMD_ID_FF_ENABLE:
-        if (g_speed_ctrl.params != NULL)
-        {
-            g_speed_ctrl.params->enable_feedforward = (uint8_t)(frame->value != 0.0f);
-        }
-        break;
-
-    default:
-        return;
-    }
-
-    ParamStorage_Save();
-}
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 

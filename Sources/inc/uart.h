@@ -16,7 +16,7 @@
 
 
 //<<AICUBE_USER_DEFINE_BEGIN>>
-void UART_DMA_Send(uint8_t *pData, uint8_t len);
+uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len);
 uint8_t xdata *UART_GetRxBuffer(uint8_t *len);
 void UART_ReleaseRxBuffer(void);
 //<<AICUBE_USER_DEFINE_END>>

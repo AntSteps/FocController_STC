@@ -425,6 +425,11 @@
               <FilePath>.\Sources\control.c</FilePath>
             </File>
             <File>
+              <FileName>command.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\command.c</FilePath>
+            </File>
+            <File>
               <FileName>ai8051u_32_mdu32.lib</FileName>
               <FileType>4</FileType>
               <FilePath>.\Sources\lib\ai8051u_32_mdu32.lib</FilePath>

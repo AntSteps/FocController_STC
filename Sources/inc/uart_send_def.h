@@ -50,7 +50,7 @@ typedef struct
     float ff[2];  // 可选的两个控制前馈项
     uint8_t seq;  // 时间戳
     uint8_t crc8; // 校验位
-} CmdFrame;
+} CtrlCmdFrame;
 #pragma pack()
 
 #pragma pack(1)
@@ -68,7 +68,7 @@ typedef struct
 typedef struct
 {
     UartCommandType type;
-    CmdFrame ctrl;
+    CtrlCmdFrame ctrl;
     ParamCmdFrame param;
 } UartCommand;
 #endif
