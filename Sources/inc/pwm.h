@@ -42,7 +42,7 @@ uint8_t HSPWMB_ReadReg(uint8_t addr);
 void HSPWMA_WriteReg(uint8_t addr, uint8_t dat);
 void HSPWMB_WriteReg(uint8_t addr, uint8_t dat);
 
-
+void Motor_PowerOn_SelfTest(void);
 
 //<<AICUBE_USER_EXTERNAL_DECLARE_BEGIN>>
 // 在此添加用户外部函数和外部变量声明  

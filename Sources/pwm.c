@@ -305,3 +305,102 @@ void HSPWMB_WriteReg(uint8_t addr, uint8_t dat)
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 
 
+// 假设你的工程中已经有了相关的延时函数，如果没有请根据你的系统时钟补充
+extern void Delay_us(uint32_t us);
+extern void Delay_ms(uint32_t ms);
+// 假设你的系统时钟频率，请根据 config.h 中实际的系统时钟修改（如 24000000, 35000000 等）
+#define SYS_CLK_HZ  40000000  
+
+// 定义发声占空比比例（用于控制音量和保护硬件）
+// 10 表示 10% 占空比。请根据电机电感和电源电压微调，从小往大加！
+#define BEEP_DUTY_PERCENT  5
+
+////////////////////////////////////////
+// 硬件PWM直接发声函数 (修改版)
+// 入口参数: phase: 组合索引 (1:U-V, 2:V-W, 3:W-U)
+//           freq_hz: 声音频率 (Hz)
+//           duration_ms: 发声持续时间 (ms)
+// 函数返回: 无
+////////////////////////////////////////
+void Motor_PlayTone_HW(uint8_t phase, uint16_t freq_hz, uint16_t duration_ms)
+{
+    // 1. 计算目标频率对应的重载值 ARR
+    // 因为你在 PWMA_Init() 中设置了中央对齐模式2 (CenterAlignMode2)，PWM周期为 2 * ARR 个时钟周期
+    // 频率 = SYS_CLK_HZ / (2 * ARR)  =>  ARR = SYS_CLK_HZ / (2 * freq_hz)
+    uint16_t arr_val = SYS_CLK_HZ / (2 * freq_hz);
+    uint16_t duty_val;
+    // 2. 动态修改定时器重载值，将PWM基础频率直接降到音频范围
+    PWMA_SetReload16(arr_val);
+
+    // 3. 计算占空比对应的值
+    duty_val = (uint32_t)arr_val * BEEP_DUTY_PERCENT / 100;
+
+    // 4. 根据相位输出：选中相输出占空比方波，未选中相保持0电平(下桥导通或悬空)
+    if (phase == 1) {        // 驱动 U-V
+        PWM_UpdateDuty(PWMA_CH1, duty_val);
+        PWM_UpdateDuty(PWMA_CH2, 0);
+        PWM_UpdateDuty(PWMA_CH3, 0);
+    } else if (phase == 2) { // 驱动 V-W
+        PWM_UpdateDuty(PWMA_CH1, 0);
+        PWM_UpdateDuty(PWMA_CH2, duty_val);
+        PWM_UpdateDuty(PWMA_CH3, 0);
+    } else if (phase == 3) { // 驱动 W-U
+        PWM_UpdateDuty(PWMA_CH1, 0);
+        PWM_UpdateDuty(PWMA_CH2, 0);
+        PWM_UpdateDuty(PWMA_CH3, duty_val);
+    }
+
+    // 5. 延时维持发声
+    Delay_ms(duration_ms);
+
+    // 6. 单音结束，关闭本轮输出
+    PWM_UpdateDuty(PWMA_CH1, 0);
+    PWM_UpdateDuty(PWMA_CH2, 0);
+    PWM_UpdateDuty(PWMA_CH3, 0);
+}
+
+////////////////////////////////////////
+// 开机电机自检提示音 
+// (在主函数中调用，不要放在PWMA_Init内部，否则会导致无限递归或状态混乱)
+// 入口参数: 无
+// 函数返回: 无
+////////////////////////////////////////
+void Motor_PowerOn_SelfTest(void)
+{
+    // 确保输出为0，停止电机
+    PWM_UpdateDuty(PWMA_CH1, 0); 
+    PWM_UpdateDuty(PWMA_CH2, 0); 
+    PWM_UpdateDuty(PWMA_CH3, 0);
+    Delay_ms(100);
+
+    // ==========================================
+    // 第一组自检：U-V相 (低频启动区)
+    // 节奏：短促的双音
+    // ==========================================
+    Motor_PlayTone_HW(1, 2400, 80);
+    Delay_ms(40); // 组内音符微小间隔
+    Motor_PlayTone_HW(1, 2800, 80);
+    
+    Delay_ms(150); // 【关键诊断间隔】留出足够的空白，区分下一相
+
+    // ==========================================
+    // 第二组自检：V-W相 (中频加速区)
+    // 节奏：短促的双音，频率拉高
+    // ==========================================
+    Motor_PlayTone_HW(2, 3200, 80);
+    Delay_ms(40);
+    Motor_PlayTone_HW(2, 3600, 80);
+    
+    Delay_ms(150); // 【关键诊断间隔】留出足够的空白，区分下一相
+
+    // ==========================================
+    // 第三组自检：W-U相 (高频就绪区)
+    // 节奏：短音 + 长尾音，宣告自检完成
+    // ==========================================
+    Motor_PlayTone_HW(3, 4000, 80);
+    Delay_ms(40);
+    Motor_PlayTone_HW(3, 4600, 250); // 最后一个音极高且拉长，极具穿透力和确认感
+    
+    // 恢复正常电机控制模式
+    PWMA_Init(); 
+}
