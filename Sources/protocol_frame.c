@@ -143,7 +143,7 @@ BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, Protoc
 
     return TRUE;
 }
-
+// 对于协议请求构造响应
 BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8_t *frame_len)
 {
     uint8_t len;

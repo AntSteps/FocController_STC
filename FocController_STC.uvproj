@@ -345,11 +345,6 @@
               <FilePath>.\Sources\protocol_frame.c</FilePath>
             </File>
             <File>
-              <FileName>protocol_parser.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\Sources\protocol_parser.c</FilePath>
-            </File>
-            <File>
               <FileName>encoder.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\encoder.c</FilePath>

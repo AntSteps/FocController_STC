@@ -36,7 +36,7 @@
 
 //<<AICUBE_USER_INCLUDE_BEGIN>>
 #include "crc8.h"
-#include "uart_send_def.h"
+#include "protocol_frame.h"
 #include "uart_controller.h"
 //<<AICUBE_USER_INCLUDE_END>>
 

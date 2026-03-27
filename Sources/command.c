@@ -149,7 +149,6 @@ static void Command_HandleQuery(const ProtocolRequest *request)
         break;
     }
 }
-
 void ProcessCommand(const ProtocolRequest *request)
 {
     ProtocolResultCode result;

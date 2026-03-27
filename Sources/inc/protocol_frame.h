@@ -4,10 +4,9 @@
 #include "def.h"
 
 #ifndef DEVICE_ID
-#define DEVICE_ID                               0x01u
+#define DEVICE_ID                               0x01u           //设备id 在此指定
 #endif
 
-#define PROTOCOL_STREAM_BUFFER_SIZE             64u
 #define PROTOCOL_MAX_FRAME_SIZE                 128u
 #define PROTOCOL_PARAM_SNAPSHOT_VERSION         0x01u
 

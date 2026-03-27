@@ -2,8 +2,6 @@
 #define __CALIBRATION_H__
 
 #include "config.h"
-#include "encoder.h"
-#include "svpwm.h"
 
 #define MOTOR_CALIB_DEFAULT_POLE_PAIRS 7
 
@@ -22,12 +20,6 @@ typedef struct
 
 /* 初始化并应用校准参数，传入NULL则使用默认参数 */
 void Motor_Calibration_Init(const Motor_Calibration *calib);
-
-/* 自动校准，返回校准结果，不直接应用到内部状态 */
-Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs);
-
-/* 获取当前校准参数 */
-const Motor_Calibration* Motor_Calibration_GetCurrent(void);
 
 /* 计算电角度（应用当前校准参数） */
 float Motor_Calibration_GetElectricalAngle(float mechanical_rad);

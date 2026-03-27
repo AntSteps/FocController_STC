@@ -1,72 +1,143 @@
 #include "uart_controller.h"
 #include "uart.h"
-#include "protocol_parser.h"
+#include <string.h>
 
-#define PROTOCOL_REQUEST_QUEUE_SIZE  4u
-
-static ProtocolParser s_protocol_parser;
-static ProtocolRequest s_request_queue[PROTOCOL_REQUEST_QUEUE_SIZE];
-static uint8_t s_request_read_index = 0u;
-static uint8_t s_request_write_index = 0u;
-static uint8_t s_request_count = 0u;
+static uint8_t s_protocol_rx_frame[UART3_RX_DMA_BUFFER_SIZE];
+static uint8_t s_protocol_rx_stream[PROTOCOL_MAX_FRAME_SIZE];
+static uint8_t s_protocol_rx_stream_len = 0u;
 static uint8_t s_protocol_tx_frame[PROTOCOL_MAX_FRAME_SIZE];
 
-static BOOL ProtocolController_EnqueueRequest(const ProtocolRequest *request)
+static void ProtocolController_AppendChunk(const uint8_t *chunk, uint8_t chunk_len)
 {
-    if ((request == (const ProtocolRequest *)0) || (s_request_count >= PROTOCOL_REQUEST_QUEUE_SIZE))
-    {
-        return FALSE;
-    }
-
-    s_request_queue[s_request_write_index] = *request;
-    s_request_write_index = (uint8_t)((s_request_write_index + 1u) % PROTOCOL_REQUEST_QUEUE_SIZE);
-    s_request_count++;
-    return TRUE;
-}
-
-void ProtocolController_Init(void)
-{
-    ProtocolParser_Init(&s_protocol_parser);
-    s_request_read_index = 0u;
-    s_request_write_index = 0u;
-    s_request_count = 0u;
-}
-
-void ProtocolController_PumpRx(void)
-{
-    uint8_t rx_len;
-    uint8_t xdata *rx_buffer;
-    ProtocolRequest request;
-
-    rx_buffer = UART_GetRxBuffer(&rx_len);
-    if ((rx_buffer == (uint8_t xdata *)0) || (rx_len == 0u))
+    if ((chunk == (const uint8_t *)0) || (chunk_len == 0u))
     {
         return;
     }
 
-    ProtocolParser_Feed(&s_protocol_parser, rx_buffer, rx_len);
-    UART_ReleaseRxBuffer();
-
-    while (ProtocolParser_Next(&s_protocol_parser, &request))
+    if ((uint16_t)s_protocol_rx_stream_len + (uint16_t)chunk_len > (uint16_t)sizeof(s_protocol_rx_stream))
     {
-        if (!ProtocolController_EnqueueRequest(&request))
-        {
-            break;
-        }
+        s_protocol_rx_stream_len = 0u;
     }
+
+    memcpy(&s_protocol_rx_stream[s_protocol_rx_stream_len], chunk, chunk_len);
+    s_protocol_rx_stream_len = (uint8_t)(s_protocol_rx_stream_len + chunk_len);
 }
 
-BOOL ProtocolController_PopRequest(ProtocolRequest *request)
+static BOOL ProtocolController_ExtractRequest(ProtocolRequest *request)
 {
-    if ((request == (ProtocolRequest *)0) || (s_request_count == 0u))
+    uint8_t offset;
+    uint8_t frame_len;
+    uint8_t found_head;
+    uint8_t remaining_len;
+
+    if (request == (ProtocolRequest *)0)
     {
         return FALSE;
     }
 
-    *request = s_request_queue[s_request_read_index];
-    s_request_read_index = (uint8_t)((s_request_read_index + 1u) % PROTOCOL_REQUEST_QUEUE_SIZE);
-    s_request_count--;
-    return TRUE;
+    while (s_protocol_rx_stream_len >= 2u)
+    {
+        found_head = FALSE;
+        frame_len = 0u;
+        for (offset = 0u; (uint8_t)(offset + 1u) < s_protocol_rx_stream_len; offset++)
+        {
+            if (ProtocolFrame_FindRequestLength(s_protocol_rx_stream[offset],
+                                                s_protocol_rx_stream[offset + 1u],
+                                                &frame_len))
+            {
+                found_head = TRUE;
+                break;
+            }
+        }
+
+        if (!found_head)
+        {
+            s_protocol_rx_stream[0] = s_protocol_rx_stream[s_protocol_rx_stream_len - 1u];
+            s_protocol_rx_stream_len = 1u;
+            return FALSE;
+        }
+
+        if (offset > 0u)
+        {
+            remaining_len = (uint8_t)(s_protocol_rx_stream_len - offset);
+            memmove(s_protocol_rx_stream, &s_protocol_rx_stream[offset], remaining_len);
+            s_protocol_rx_stream_len = remaining_len;
+        }
+
+        if (s_protocol_rx_stream_len < frame_len)
+        {
+            return FALSE;
+        }
+
+        if (!ProtocolFrame_CheckCrc(s_protocol_rx_stream, frame_len))
+        {
+            memmove(s_protocol_rx_stream,
+                    &s_protocol_rx_stream[1],
+                    (uint8_t)(s_protocol_rx_stream_len - 1u));
+            s_protocol_rx_stream_len = (uint8_t)(s_protocol_rx_stream_len - 1u);
+            continue;
+        }
+
+        if (!ProtocolFrame_DecodeRequest(s_protocol_rx_stream, frame_len, request))
+        {
+            memmove(s_protocol_rx_stream,
+                    &s_protocol_rx_stream[1],
+                    (uint8_t)(s_protocol_rx_stream_len - 1u));
+            s_protocol_rx_stream_len = (uint8_t)(s_protocol_rx_stream_len - 1u);
+            continue;
+        }
+
+        remaining_len = (uint8_t)(s_protocol_rx_stream_len - frame_len);
+        if (remaining_len > 0u)
+        {
+            memmove(s_protocol_rx_stream, &s_protocol_rx_stream[frame_len], remaining_len);
+        }
+        s_protocol_rx_stream_len = remaining_len;
+
+        if (request->motor_id != DEVICE_ID)
+        {
+            continue;
+        }
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+void ProtocolController_Init(void)
+{
+    s_protocol_rx_stream_len = 0u;
+}
+
+BOOL ProtocolController_PumpRx(ProtocolRequest *request)
+{
+    uint8_t rx_len;
+    uint8_t xdata *rx_buffer;
+
+    if (request == (ProtocolRequest *)0)
+    {
+        return FALSE;
+    }
+
+    while (1)
+    {
+        rx_buffer = UART_GetRxBuffer(&rx_len);
+        if ((rx_buffer == (uint8_t xdata *)0) || (rx_len == 0u))
+        {
+            break;
+        }
+
+        if (rx_len <= UART3_RX_DMA_BUFFER_SIZE)
+        {
+            memcpy(s_protocol_rx_frame, rx_buffer, rx_len);
+            ProtocolController_AppendChunk(s_protocol_rx_frame, rx_len);
+        }
+
+        UART_ReleaseRxBuffer();
+    }
+
+    return ProtocolController_ExtractRequest(request);
 }
 
 BOOL ProtocolController_SendReply(const ProtocolReply *reply)

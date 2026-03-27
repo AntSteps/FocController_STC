@@ -7,14 +7,45 @@ import argparse
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from queue import Empty, Queue
-import struct
-import threading
 import time
-from typing import Callable, Deque, Dict, List, Optional, Tuple, Union
+from typing import Deque, Dict, List, Optional
 
-import serial
-import serial.tools.list_ports
+from protocol_codec import (
+    CALIB_STATE_FAIL_BUSY,
+    CALIB_STATE_FAIL_ENCODER,
+    CALIB_STATE_FAIL_INTERNAL,
+    CALIB_STATE_IDLE,
+    CALIB_STATE_RUNNING,
+    CALIB_STATE_SUCCESS,
+    CTRL_MODE_SPEED,
+    CTRL_MODE_STOP,
+    REQUEST_KIND_CALIB,
+    REQUEST_KIND_CTRL,
+    REQUEST_KIND_PARAM_WRITE,
+    REQUEST_KIND_QUERY,
+    RESULT_BUSY,
+    RESULT_CALIB_FAILED,
+    RESULT_EEPROM_ERROR,
+    RESULT_INTERNAL_ERROR,
+    RESULT_INVALID_PARAM,
+    RESULT_INVALID_VALUE,
+    RESULT_OK,
+    RESULT_UNSUPPORTED,
+    format_hex,
+    parse_status,
+)
+from protocol_service import (
+    AckReply,
+    CalibStatusReply,
+    DEFAULT_BAUDRATE,
+    DEFAULT_CALIB_POLL_HZ,
+    DEFAULT_POLL_HZ,
+    ParamSnapshotReply,
+    ParamValueReply,
+    ProtocolService,
+    StateReply,
+    list_serial_ports,
+)
 
 try:
     from dearpygui import dearpygui as dpg
@@ -24,98 +55,8 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 
-ACK_REPLY_HEAD = 0x0621
-STATE_REPLY_HEAD = 0x0721
-PARAM_VALUE_REPLY_HEAD = 0x0821
-PARAM_SNAPSHOT_REPLY_HEAD = 0x0921
-CALIB_STATUS_REPLY_HEAD = 0x0A21
-
-CTRL_CMD_HEAD = 0x1145
-PARAM_WRITE_CMD_HEAD = 0x1245
-QUERY_CMD_HEAD = 0x1345
-CALIB_CMD_HEAD = 0x1445
-
-QUERY_GET_STATE = 0x01
-QUERY_GET_PARAM = 0x02
-QUERY_GET_PARAM_SNAPSHOT = 0x03
-QUERY_GET_CALIB_STATUS = 0x04
-
-CALIB_CMD_START_AUTO = 0x01
-
-REQUEST_KIND_CTRL = 1
-REQUEST_KIND_PARAM_WRITE = 2
-REQUEST_KIND_QUERY = 3
-REQUEST_KIND_CALIB = 4
-
-CTRL_MODE_STOP = 0
-CTRL_MODE_SPEED = 1
-
-RESULT_OK = 0
-RESULT_BUSY = 1
-RESULT_UNSUPPORTED = 2
-RESULT_INVALID_PARAM = 3
-RESULT_INVALID_VALUE = 4
-RESULT_EEPROM_ERROR = 5
-RESULT_CALIB_FAILED = 6
-RESULT_INTERNAL_ERROR = 7
-
-CALIB_STATE_IDLE = 0
-CALIB_STATE_RUNNING = 1
-CALIB_STATE_SUCCESS = 2
-CALIB_STATE_FAIL_ENCODER = 3
-CALIB_STATE_FAIL_BUSY = 4
-CALIB_STATE_FAIL_INTERNAL = 5
-
-STATUS_ENCODER_FAULT = 0x01
-STATUS_MOTOR_FAULT = 0x02
-STATUS_ENC_MAG_MASK = 0x0C
-STATUS_ENC_MAG_SHIFT = 2
-STATUS_ENC_PRESS = 0x10
-STATUS_ENC_OVERSPEED = 0x20
-STATUS_ENC_DATA_GOOD = 0x40
-STATUS_PARAM_FROM_EEPROM = 0x80
-
-CTRL_CMD_FRAME_FORMAT = ">HBBfffBB"
-PARAM_WRITE_CMD_FRAME_FORMAT = ">HBBfBB"
-QUERY_CMD_FRAME_FORMAT = ">HBBBBB"
-CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
-
-ACK_REPLY_FRAME_FORMAT = ">HBBBBB"
-STATE_REPLY_FRAME_FORMAT = ">HBBfffffBBB"
-PARAM_VALUE_REPLY_FRAME_FORMAT = ">HBBfBB"
-PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffBfffhhhfffffBB"
-CALIB_STATUS_REPLY_FRAME_FORMAT = ">HBBBBB"
-
-CTRL_CMD_FRAME_SIZE = struct.calcsize(CTRL_CMD_FRAME_FORMAT)
-PARAM_WRITE_CMD_FRAME_SIZE = struct.calcsize(PARAM_WRITE_CMD_FRAME_FORMAT)
-QUERY_CMD_FRAME_SIZE = struct.calcsize(QUERY_CMD_FRAME_FORMAT)
-CALIB_CMD_FRAME_SIZE = struct.calcsize(CALIB_CMD_FRAME_FORMAT)
-
-ACK_REPLY_FRAME_SIZE = struct.calcsize(ACK_REPLY_FRAME_FORMAT)
-STATE_REPLY_FRAME_SIZE = struct.calcsize(STATE_REPLY_FRAME_FORMAT)
-PARAM_VALUE_REPLY_FRAME_SIZE = struct.calcsize(PARAM_VALUE_REPLY_FRAME_FORMAT)
-PARAM_SNAPSHOT_REPLY_FRAME_SIZE = struct.calcsize(PARAM_SNAPSHOT_REPLY_FRAME_FORMAT)
-CALIB_STATUS_REPLY_FRAME_SIZE = struct.calcsize(CALIB_STATUS_REPLY_FRAME_FORMAT)
-
-MIN_REPLY_FRAME_SIZE = min(
-    ACK_REPLY_FRAME_SIZE,
-    PARAM_VALUE_REPLY_FRAME_SIZE,
-    CALIB_STATUS_REPLY_FRAME_SIZE,
-)
-
 MAX_LOG_LINES = 300
-DEFAULT_BAUDRATE = 1_000_000
 DEFAULT_HISTORY_LENGTH = 500
-DEFAULT_POLL_HZ = 10.0
-DEFAULT_CALIB_POLL_HZ = 2.0
-REQUEST_TIMEOUT_SECONDS = 1.5
-
-MAG_FIELD_LABELS = {
-    0: "磁场正常",
-    1: "磁场过强",
-    2: "磁场过弱",
-    3: "磁场无效",
-}
 
 WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/msyh.ttc"),
@@ -127,72 +68,6 @@ WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/Dengb.ttf"),
 ]
 
-REPLY_FRAME_SPECS: Dict[int, Tuple[int, str]] = {
-    ACK_REPLY_HEAD: (ACK_REPLY_FRAME_SIZE, "ACK"),
-    STATE_REPLY_HEAD: (STATE_REPLY_FRAME_SIZE, "STATE"),
-    PARAM_VALUE_REPLY_HEAD: (PARAM_VALUE_REPLY_FRAME_SIZE, "PARAM"),
-    PARAM_SNAPSHOT_REPLY_HEAD: (PARAM_SNAPSHOT_REPLY_FRAME_SIZE, "SNAPSHOT"),
-    CALIB_STATUS_REPLY_HEAD: (CALIB_STATUS_REPLY_FRAME_SIZE, "CALIB"),
-}
-
-
-def crc8_check(data: bytes, has_crc: int = 0) -> int:
-    crc = 0x00
-    length = len(data) - has_crc
-    for index in range(length):
-        crc ^= data[index]
-        for _ in range(8):
-            if crc & 0x80:
-                crc = ((crc << 1) ^ 0x07) & 0xFF
-            else:
-                crc = (crc << 1) & 0xFF
-    return crc
-
-
-def parse_status(status: int) -> str:
-    details: List[str] = []
-    mag_field = (status & STATUS_ENC_MAG_MASK) >> STATUS_ENC_MAG_SHIFT
-
-    if status & STATUS_ENCODER_FAULT:
-        details.append("编码器异常")
-    else:
-        details.append("编码器正常")
-
-    if status & STATUS_MOTOR_FAULT:
-        details.append("电机异常")
-
-    details.append(MAG_FIELD_LABELS.get(mag_field, f"磁场未知({mag_field})"))
-
-    if status & STATUS_ENC_DATA_GOOD:
-        details.append("数据有效")
-    else:
-        details.append("数据无效")
-
-    if status & STATUS_ENC_PRESS:
-        details.append("按压触发")
-
-    if status & STATUS_ENC_OVERSPEED:
-        details.append("超速标志")
-
-    if status & STATUS_PARAM_FROM_EEPROM:
-        details.append("参数来自EEPROM")
-    else:
-        details.append("参数未从EEPROM加载")
-
-    return ", ".join(details)
-
-
-def format_hex(data: bytes) -> str:
-    return " ".join(f"{byte:02X}" for byte in data)
-
-
-def parse_hex_string(text: str) -> bytes:
-    cleaned = text.replace(",", " ").replace("0x", " ").replace("0X", " ")
-    tokens = [token for token in cleaned.split() if token]
-    if not tokens:
-        raise ValueError("请输入十六进制字节，例如 13 45 01 01 00 01")
-    return bytes(int(token, 16) & 0xFF for token in tokens)
-
 
 def find_cjk_font() -> Optional[Path]:
     for font_path in WINDOWS_FONT_CANDIDATES:
@@ -201,450 +76,11 @@ def find_cjk_font() -> Optional[Path]:
     return None
 
 
-def pack_frame(fmt: str, *values: object) -> bytes:
-    payload = struct.pack(fmt, *values)
-    crc = crc8_check(payload, has_crc=1)
-    return payload[:-1] + bytes([crc])
-
-
-def unpack_frame(fmt: str, data: bytes, expected_head: int, frame_name: str) -> Tuple[object, ...]:
-    if len(data) != struct.calcsize(fmt):
-        raise ValueError(f"{frame_name} 长度错误: {len(data)}")
-    values = struct.unpack(fmt, data)
-    head = int(values[0])
-    if head != expected_head:
-        raise ValueError(f"{frame_name} 帧头错误: 0x{head:04X}")
-    calc_crc = crc8_check(data, has_crc=1)
-    recv_crc = int(values[-1])
-    if calc_crc != recv_crc:
-        raise ValueError(
-            f"{frame_name} CRC 错误: 计算 0x{calc_crc:02X}, 接收 0x{recv_crc:02X}"
-        )
-    return values
-
-
 @dataclass(frozen=True)
 class ChoiceOption:
     value: int
     label: str
     description: str = ""
-
-
-@dataclass
-class CtrlCmdFrame:
-    motor_id: int
-    ctrl_mode: int
-    target: float
-    ff0: float
-    ff1: float
-    seq: int
-    head: int = CTRL_CMD_HEAD
-
-    def to_bytes(self) -> bytes:
-        return pack_frame(
-            CTRL_CMD_FRAME_FORMAT,
-            self.head,
-            self.motor_id & 0xFF,
-            self.ctrl_mode & 0xFF,
-            float(self.target),
-            float(self.ff0),
-            float(self.ff1),
-            self.seq & 0xFF,
-            0,
-        )
-
-    def to_summary(self, labels: Dict[int, str]) -> str:
-        mode_label = labels.get(self.ctrl_mode, f"模式 {self.ctrl_mode}")
-        return (
-            f"控制命令 ID={self.motor_id} seq={self.seq} "
-            f"mode={mode_label} target={self.target:.3f} "
-            f"ff=[{self.ff0:.3f}, {self.ff1:.3f}]"
-        )
-
-
-@dataclass
-class ParamWriteCmdFrame:
-    motor_id: int
-    param_id: int
-    value: float
-    seq: int
-    head: int = PARAM_WRITE_CMD_HEAD
-
-    def to_bytes(self) -> bytes:
-        return pack_frame(
-            PARAM_WRITE_CMD_FRAME_FORMAT,
-            self.head,
-            self.motor_id & 0xFF,
-            self.param_id & 0xFF,
-            float(self.value),
-            self.seq & 0xFF,
-            0,
-        )
-
-    def to_summary(self, labels: Dict[int, str]) -> str:
-        param_label = labels.get(self.param_id, f"参数 {self.param_id}")
-        return (
-            f"参数写入 ID={self.motor_id} seq={self.seq} "
-            f"param={param_label} value={self.value:.6f}"
-        )
-
-
-@dataclass
-class QueryCmdFrame:
-    motor_id: int
-    query_type: int
-    arg0: int
-    seq: int
-    head: int = QUERY_CMD_HEAD
-
-    def to_bytes(self) -> bytes:
-        return pack_frame(
-            QUERY_CMD_FRAME_FORMAT,
-            self.head,
-            self.motor_id & 0xFF,
-            self.query_type & 0xFF,
-            self.arg0 & 0xFF,
-            self.seq & 0xFF,
-            0,
-        )
-
-    def to_summary(self, query_labels: Dict[int, str], arg_label: str = "") -> str:
-        query_name = query_labels.get(self.query_type, f"查询 {self.query_type}")
-        suffix = f" arg={arg_label}" if arg_label else ""
-        return f"查询命令 ID={self.motor_id} seq={self.seq} {query_name}{suffix}"
-
-
-@dataclass
-class CalibCmdFrame:
-    motor_id: int
-    calib_cmd: int
-    arg0: int
-    seq: int
-    head: int = CALIB_CMD_HEAD
-
-    def to_bytes(self) -> bytes:
-        return pack_frame(
-            CALIB_CMD_FRAME_FORMAT,
-            self.head,
-            self.motor_id & 0xFF,
-            self.calib_cmd & 0xFF,
-            self.arg0 & 0xFF,
-            self.seq & 0xFF,
-            0,
-        )
-
-    def to_summary(self, labels: Dict[int, str]) -> str:
-        calib_name = labels.get(self.calib_cmd, f"校准命令 {self.calib_cmd}")
-        return f"校准命令 ID={self.motor_id} seq={self.seq} {calib_name}"
-
-
-@dataclass
-class AckReply:
-    motor_id: int
-    cmd_type: int
-    result_code: int
-    seq: int
-    crc8: int
-    head: int = ACK_REPLY_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "AckReply":
-        values = unpack_frame(ACK_REPLY_FRAME_FORMAT, data, ACK_REPLY_HEAD, "AckReply")
-        _, motor_id, cmd_type, result_code, seq, crc8 = values
-        return cls(
-            motor_id=int(motor_id),
-            cmd_type=int(cmd_type),
-            result_code=int(result_code),
-            seq=int(seq),
-            crc8=int(crc8),
-        )
-
-    def to_summary(self, cmd_labels: Dict[int, str], result_labels: Dict[int, str]) -> str:
-        cmd_name = cmd_labels.get(self.cmd_type, f"命令 {self.cmd_type}")
-        result_name = result_labels.get(self.result_code, f"结果 {self.result_code}")
-        return f"ACK ID={self.motor_id} seq={self.seq} cmd={cmd_name} result={result_name}"
-
-
-@dataclass
-class StateReply:
-    motor_id: int
-    control_mode: int
-    target: float
-    velocity: float
-    output: float
-    position: float
-    voltage: float
-    health_status: int
-    seq: int
-    crc8: int
-    head: int = STATE_REPLY_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "StateReply":
-        values = unpack_frame(STATE_REPLY_FRAME_FORMAT, data, STATE_REPLY_HEAD, "StateReply")
-        (
-            _,
-            motor_id,
-            control_mode,
-            target,
-            velocity,
-            output,
-            position,
-            voltage,
-            health_status,
-            seq,
-            crc8,
-        ) = values
-        return cls(
-            motor_id=int(motor_id),
-            control_mode=int(control_mode),
-            target=float(target),
-            velocity=float(velocity),
-            output=float(output),
-            position=float(position),
-            voltage=float(voltage),
-            health_status=int(health_status),
-            seq=int(seq),
-            crc8=int(crc8),
-        )
-
-    def to_summary(self, mode_labels: Dict[int, str]) -> str:
-        mode_name = mode_labels.get(self.control_mode, f"模式 {self.control_mode}")
-        return (
-            f"STATE ID={self.motor_id} seq={self.seq} mode={mode_name} "
-            f"target={self.target:.3f} vel={self.velocity:.3f} "
-            f"out={self.output:.3f} pos={self.position:.3f} "
-            f"Vbus={self.voltage:.3f} status=0x{self.health_status:02X}"
-            f"({parse_status(self.health_status)})"
-        )
-
-
-@dataclass
-class ParamValueReply:
-    motor_id: int
-    param_id: int
-    value: float
-    seq: int
-    crc8: int
-    head: int = PARAM_VALUE_REPLY_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "ParamValueReply":
-        values = unpack_frame(
-            PARAM_VALUE_REPLY_FRAME_FORMAT,
-            data,
-            PARAM_VALUE_REPLY_HEAD,
-            "ParamValueReply",
-        )
-        _, motor_id, param_id, value, seq, crc8 = values
-        return cls(
-            motor_id=int(motor_id),
-            param_id=int(param_id),
-            value=float(value),
-            seq=int(seq),
-            crc8=int(crc8),
-        )
-
-    def to_summary(self, param_labels: Dict[int, str]) -> str:
-        param_name = param_labels.get(self.param_id, f"参数 {self.param_id}")
-        return (
-            f"PARAM ID={self.motor_id} seq={self.seq} "
-            f"{param_name}={self.value:.6f}"
-        )
-
-
-@dataclass
-class ParamSnapshot:
-    motor_pole_pairs: int
-    motor_phase_resistance: float
-    motor_phase_inductance: float
-    cur_kp: float
-    cur_ki: float
-    speed_kp: float
-    speed_ki: float
-    speed_out_max: float
-    speed_out_min: float
-    speed_lpf_time_constant_ms: float
-    ff_velocity_gain: float
-    ff_acceleration_gain: float
-    ff_friction_compensation: float
-    ff_enable: int
-    speed_sample_freq_hz: float
-    current_limit: float
-    velocity_limit: float
-    encoder_offset: int
-    calib_pole_pairs: int
-    calib_dir: int
-    calib_electrical_offset_rad: float
-    calib_harmonic_amp_1: float
-    calib_harmonic_phase_1: float
-    calib_harmonic_amp_2: float
-    calib_harmonic_phase_2: float
-
-    def to_lines(self) -> List[str]:
-        return [
-            f"motor_pole_pairs = {self.motor_pole_pairs}",
-            f"motor_phase_resistance = {self.motor_phase_resistance:.6f}",
-            f"motor_phase_inductance = {self.motor_phase_inductance:.6f}",
-            f"cur_kp = {self.cur_kp:.6f}",
-            f"cur_ki = {self.cur_ki:.6f}",
-            f"speed_kp = {self.speed_kp:.6f}",
-            f"speed_ki = {self.speed_ki:.6f}",
-            f"speed_out_max = {self.speed_out_max:.6f}",
-            f"speed_out_min = {self.speed_out_min:.6f}",
-            f"speed_lpf_time_constant_ms = {self.speed_lpf_time_constant_ms:.6f}",
-            f"ff_velocity_gain = {self.ff_velocity_gain:.6f}",
-            f"ff_acceleration_gain = {self.ff_acceleration_gain:.6f}",
-            f"ff_friction_compensation = {self.ff_friction_compensation:.6f}",
-            f"ff_enable = {self.ff_enable}",
-            f"speed_sample_freq_hz = {self.speed_sample_freq_hz:.6f}",
-            f"current_limit = {self.current_limit:.6f}",
-            f"velocity_limit = {self.velocity_limit:.6f}",
-            f"encoder_offset = {self.encoder_offset}",
-            f"calib_pole_pairs = {self.calib_pole_pairs}",
-            f"calib_dir = {self.calib_dir}",
-            f"calib_electrical_offset_rad = {self.calib_electrical_offset_rad:.6f}",
-            f"calib_harmonic_amp_1 = {self.calib_harmonic_amp_1:.6f}",
-            f"calib_harmonic_phase_1 = {self.calib_harmonic_phase_1:.6f}",
-            f"calib_harmonic_amp_2 = {self.calib_harmonic_amp_2:.6f}",
-            f"calib_harmonic_phase_2 = {self.calib_harmonic_phase_2:.6f}",
-        ]
-
-
-@dataclass
-class ParamSnapshotReply:
-    motor_id: int
-    snapshot_version: int
-    snapshot: ParamSnapshot
-    seq: int
-    crc8: int
-    head: int = PARAM_SNAPSHOT_REPLY_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "ParamSnapshotReply":
-        values = unpack_frame(
-            PARAM_SNAPSHOT_REPLY_FRAME_FORMAT,
-            data,
-            PARAM_SNAPSHOT_REPLY_HEAD,
-            "ParamSnapshotReply",
-        )
-        (
-            _,
-            motor_id,
-            snapshot_version,
-            motor_pole_pairs,
-            motor_phase_resistance,
-            motor_phase_inductance,
-            cur_kp,
-            cur_ki,
-            speed_kp,
-            speed_ki,
-            speed_out_max,
-            speed_out_min,
-            speed_lpf_time_constant_ms,
-            ff_velocity_gain,
-            ff_acceleration_gain,
-            ff_friction_compensation,
-            ff_enable,
-            speed_sample_freq_hz,
-            current_limit,
-            velocity_limit,
-            encoder_offset,
-            calib_pole_pairs,
-            calib_dir,
-            calib_electrical_offset_rad,
-            calib_harmonic_amp_1,
-            calib_harmonic_phase_1,
-            calib_harmonic_amp_2,
-            calib_harmonic_phase_2,
-            seq,
-            crc8,
-        ) = values
-        snapshot = ParamSnapshot(
-            motor_pole_pairs=int(motor_pole_pairs),
-            motor_phase_resistance=float(motor_phase_resistance),
-            motor_phase_inductance=float(motor_phase_inductance),
-            cur_kp=float(cur_kp),
-            cur_ki=float(cur_ki),
-            speed_kp=float(speed_kp),
-            speed_ki=float(speed_ki),
-            speed_out_max=float(speed_out_max),
-            speed_out_min=float(speed_out_min),
-            speed_lpf_time_constant_ms=float(speed_lpf_time_constant_ms),
-            ff_velocity_gain=float(ff_velocity_gain),
-            ff_acceleration_gain=float(ff_acceleration_gain),
-            ff_friction_compensation=float(ff_friction_compensation),
-            ff_enable=int(ff_enable),
-            speed_sample_freq_hz=float(speed_sample_freq_hz),
-            current_limit=float(current_limit),
-            velocity_limit=float(velocity_limit),
-            encoder_offset=int(encoder_offset),
-            calib_pole_pairs=int(calib_pole_pairs),
-            calib_dir=int(calib_dir),
-            calib_electrical_offset_rad=float(calib_electrical_offset_rad),
-            calib_harmonic_amp_1=float(calib_harmonic_amp_1),
-            calib_harmonic_phase_1=float(calib_harmonic_phase_1),
-            calib_harmonic_amp_2=float(calib_harmonic_amp_2),
-            calib_harmonic_phase_2=float(calib_harmonic_phase_2),
-        )
-        return cls(
-            motor_id=int(motor_id),
-            snapshot_version=int(snapshot_version),
-            snapshot=snapshot,
-            seq=int(seq),
-            crc8=int(crc8),
-        )
-
-    def to_summary(self) -> str:
-        return (
-            f"SNAPSHOT ID={self.motor_id} seq={self.seq} "
-            f"version={self.snapshot_version} pole_pairs={self.snapshot.motor_pole_pairs} "
-            f"vel_limit={self.snapshot.velocity_limit:.3f}"
-        )
-
-
-@dataclass
-class CalibStatusReply:
-    motor_id: int
-    calib_state: int
-    progress: int
-    seq: int
-    crc8: int
-    head: int = CALIB_STATUS_REPLY_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "CalibStatusReply":
-        values = unpack_frame(
-            CALIB_STATUS_REPLY_FRAME_FORMAT,
-            data,
-            CALIB_STATUS_REPLY_HEAD,
-            "CalibStatusReply",
-        )
-        _, motor_id, calib_state, progress, seq, crc8 = values
-        return cls(
-            motor_id=int(motor_id),
-            calib_state=int(calib_state),
-            progress=int(progress),
-            seq=int(seq),
-            crc8=int(crc8),
-        )
-
-    def to_summary(self, calib_labels: Dict[int, str]) -> str:
-        state_name = calib_labels.get(self.calib_state, f"状态 {self.calib_state}")
-        return (
-            f"CALIB ID={self.motor_id} seq={self.seq} "
-            f"state={state_name} progress={self.progress}%"
-        )
-
-
-ParsedReply = Union[AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply]
-
-
-@dataclass
-class PendingRequest:
-    seq: int
-    summary: str
-    timestamp: float
 
 
 @dataclass
@@ -675,19 +111,6 @@ class AppConfig:
         default_factory=lambda: [
             ChoiceOption(CTRL_MODE_STOP, "停止/休眠", "ctrl=0"),
             ChoiceOption(CTRL_MODE_SPEED, "速度模式", "ctrl=1"),
-        ]
-    )
-    query_defs: List[ChoiceOption] = field(
-        default_factory=lambda: [
-            ChoiceOption(QUERY_GET_STATE, "读取状态"),
-            ChoiceOption(QUERY_GET_PARAM, "读取参数"),
-            ChoiceOption(QUERY_GET_PARAM_SNAPSHOT, "读取参数快照"),
-            ChoiceOption(QUERY_GET_CALIB_STATUS, "读取校准状态"),
-        ]
-    )
-    calib_defs: List[ChoiceOption] = field(
-        default_factory=lambda: [
-            ChoiceOption(CALIB_CMD_START_AUTO, "开始自动校准"),
         ]
     )
     param_defs: List[ChoiceOption] = field(
@@ -770,190 +193,6 @@ class AppConfig:
     def ack_cmd_labels(self) -> Dict[int, str]:
         return {item.value: item.label for item in self.ack_cmd_defs}
 
-    @property
-    def query_labels(self) -> Dict[int, str]:
-        return {item.value: item.label for item in self.query_defs}
-
-    @property
-    def calib_cmd_labels(self) -> Dict[int, str]:
-        return {item.value: item.label for item in self.calib_defs}
-
-
-class SerialWorker:
-    def __init__(
-        self,
-        port: str,
-        baudrate: int,
-        on_event: Callable[[str, object], None],
-    ) -> None:
-        self.port = port
-        self.baudrate = baudrate
-        self.on_event = on_event
-        self._serial: Optional[serial.Serial] = None
-        self._thread: Optional[threading.Thread] = None
-        self._tx_queue: "Queue[tuple[bytes, str, Optional[int]]]" = Queue()
-        self._stop_event = threading.Event()
-        self._buffer = bytearray()
-
-    def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run, name="serial-worker", daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.5)
-        self._thread = None
-
-    def send(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
-        self._tx_queue.put((payload, summary, expected_seq))
-
-    def _run(self) -> None:
-        try:
-            self._serial = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=0.05,
-                write_timeout=0.2,
-            )
-        except serial.SerialException as exc:
-            self.on_event("connection", {"connected": False, "message": f"串口打开失败: {exc}"})
-            return
-
-        self.on_event(
-            "connection",
-            {"connected": True, "message": f"已连接 {self.port} @ {self.baudrate}bps"},
-        )
-
-        try:
-            while not self._stop_event.is_set():
-                self._drain_tx_queue()
-                incoming = self._serial.read(256)
-                if incoming:
-                    self._buffer.extend(incoming)
-                    self._process_rx_buffer()
-        except serial.SerialException as exc:
-            self.on_event("error", f"串口通信异常: {exc}")
-        finally:
-            if self._serial is not None:
-                try:
-                    self._serial.close()
-                except serial.SerialException:
-                    pass
-                self._serial = None
-            self.on_event("connection", {"connected": False, "message": "串口已断开"})
-
-    def _drain_tx_queue(self) -> None:
-        while True:
-            try:
-                payload, summary, expected_seq = self._tx_queue.get_nowait()
-            except Empty:
-                break
-
-            if self._serial is None:
-                self.on_event("error", "串口未连接，发送失败")
-                continue
-
-            try:
-                self._serial.write(payload)
-                self._serial.flush()
-            except serial.SerialTimeoutException as exc:
-                self.on_event("error", f"串口发送超时: {exc}")
-                continue
-            except serial.SerialException as exc:
-                self.on_event("error", f"串口发送失败: {exc}")
-                continue
-
-            self.on_event(
-                "tx",
-                {
-                    "summary": summary,
-                    "payload": payload,
-                    "expected_seq": expected_seq,
-                },
-            )
-
-    def _find_reply_header(self) -> int:
-        for index in range(len(self._buffer) - 1):
-            head = (int(self._buffer[index]) << 8) | int(self._buffer[index + 1])
-            if head in REPLY_FRAME_SPECS:
-                return index
-        return -1
-
-    def _keep_possible_header_prefix(self) -> int:
-        if self._buffer and int(self._buffer[-1]) in (0x06, 0x07, 0x08, 0x09, 0x0A):
-            last_byte = self._buffer[-1]
-            self._buffer.clear()
-            self._buffer.append(last_byte)
-            return 1
-        self._buffer.clear()
-        return 0
-
-    def _decode_reply(self, frame_bytes: bytes) -> ParsedReply:
-        if len(frame_bytes) < 2:
-            raise ValueError("回复帧长度不足")
-
-        head = (frame_bytes[0] << 8) | frame_bytes[1]
-        if head == ACK_REPLY_HEAD:
-            return AckReply.from_bytes(frame_bytes)
-        if head == STATE_REPLY_HEAD:
-            return StateReply.from_bytes(frame_bytes)
-        if head == PARAM_VALUE_REPLY_HEAD:
-            return ParamValueReply.from_bytes(frame_bytes)
-        if head == PARAM_SNAPSHOT_REPLY_HEAD:
-            return ParamSnapshotReply.from_bytes(frame_bytes)
-        if head == CALIB_STATUS_REPLY_HEAD:
-            return CalibStatusReply.from_bytes(frame_bytes)
-        raise ValueError(f"未知回复帧头: 0x{head:04X}")
-
-    def _process_rx_buffer(self) -> None:
-        while True:
-            if len(self._buffer) < 2:
-                break
-
-            header_pos = self._find_reply_header()
-            if header_pos < 0:
-                dropped = len(self._buffer)
-                kept = self._keep_possible_header_prefix()
-                if dropped > kept:
-                    self.on_event("parse_error", f"未找到上行帧头，丢弃 {dropped - kept} 字节")
-                break
-
-            if header_pos > 0:
-                del self._buffer[:header_pos]
-                self.on_event("parse_error", f"跳过 {header_pos} 字节噪声数据")
-
-            if len(self._buffer) < 2:
-                break
-
-            head = (int(self._buffer[0]) << 8) | int(self._buffer[1])
-            spec = REPLY_FRAME_SPECS.get(head)
-            if spec is None:
-                del self._buffer[0]
-                self.on_event("parse_error", f"未知回复帧头: 0x{head:04X}")
-                continue
-
-            frame_size, _ = spec
-            if len(self._buffer) < frame_size:
-                break
-
-            frame_bytes = bytes(self._buffer[:frame_size])
-            try:
-                reply = self._decode_reply(frame_bytes)
-            except ValueError as exc:
-                del self._buffer[0]
-                self.on_event("parse_error", str(exc))
-                continue
-
-            del self._buffer[:frame_size]
-            self.on_event("rx", {"reply": reply, "payload": frame_bytes})
-
 
 class FOCGuiApp:
     def __init__(self, initial_port: str = "", initial_baudrate: int = DEFAULT_BAUDRATE) -> None:
@@ -961,11 +200,8 @@ class FOCGuiApp:
         self.state = TelemetryState()
         self.initial_port = initial_port
         self.initial_baudrate = initial_baudrate
-        self.worker: Optional[SerialWorker] = None
-        self.events: "Queue[Tuple[str, object]]" = Queue()
+        self.service = ProtocolService()
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
-        self.pending_requests: Dict[int, PendingRequest] = {}
-        self.sequence_counter = 0
         self.plot_dirty = False
         self.font_status = "未加载中文字体"
         self.next_state_poll_at = 0.0
@@ -1015,9 +251,6 @@ class FOCGuiApp:
             "voltage_series": "voltage_series",
         }
 
-    def post_event(self, event_type: str, payload: object) -> None:
-        self.events.put((event_type, payload))
-
     def run(self) -> None:
         dpg.create_context()
         self._setup_fonts()
@@ -1039,7 +272,6 @@ class FOCGuiApp:
 
         while dpg.is_dearpygui_running():
             self._process_events()
-            self._check_timeouts()
             self._run_pollers()
             if self.plot_dirty:
                 self._update_plots()
@@ -1325,7 +557,7 @@ class FOCGuiApp:
             dpg.set_axis_limits_auto(y_axis)
 
     def refresh_ports(self, select_port: str = "") -> None:
-        ports = [port.device for port in serial.tools.list_ports.comports()]
+        ports = list_serial_ports()
         dpg.configure_item(self.tags["port_combo"], items=ports)
 
         current_value = str(dpg.get_value(self.tags["port_combo"]) or "")
@@ -1340,31 +572,19 @@ class FOCGuiApp:
             self._append_log("SYS", "未发现可用串口")
 
     def connect(self) -> None:
-        if self.worker is not None:
-            self._append_log("SYS", "已有连接实例在运行")
-            return
-
         port = str(dpg.get_value(self.tags["port_combo"]) or self.initial_port)
         baudrate = int(dpg.get_value(self.tags["baud_input"]))
         if not port:
             self._append_log("ERR", "请选择串口后再连接")
             return
 
-        self.pending_requests.clear()
         self.next_state_poll_at = time.monotonic()
         self.next_calib_poll_at = time.monotonic()
-        self.worker = SerialWorker(port=port, baudrate=baudrate, on_event=self.post_event)
         dpg.set_value(self.tags["status_text"], f"连接中: {port} @ {baudrate}")
-        self.worker.start()
+        self.service.connect(port=port, baudrate=baudrate)
 
     def disconnect(self) -> None:
-        if self.worker is None:
-            return
-
-        worker = self.worker
-        self.worker = None
-        self.pending_requests.clear()
-        worker.stop()
+        self.service.disconnect()
 
     def clear_logs(self) -> None:
         self.log_lines.clear()
@@ -1380,18 +600,12 @@ class FOCGuiApp:
         return int(dpg.get_value(self.tags["motor_id"])) & 0xFF
 
     def _next_seq(self) -> int:
-        if dpg.get_value(self.tags["auto_seq"]):
-            seq = self.sequence_counter & 0xFF
-            self.sequence_counter = (self.sequence_counter + 1) & 0xFF
+        auto_seq = bool(dpg.get_value(self.tags["auto_seq"]))
+        manual_seq = int(dpg.get_value(self.tags["seq_input"])) & 0xFF
+        seq = self.service.allocate_seq(auto_enabled=auto_seq, manual_seq=manual_seq)
+        if auto_seq:
             dpg.set_value(self.tags["seq_input"], seq)
-            return seq
-        return int(dpg.get_value(self.tags["seq_input"])) & 0xFF
-
-    def _queue_frame(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
-        if self.worker is None:
-            self._append_log("ERR", "串口未连接，无法发送")
-            return
-        self.worker.send(payload, summary, expected_seq)
+        return seq
 
     def send_control_command(self) -> None:
         mode_label = str(dpg.get_value(self.tags["control_mode"]))
@@ -1401,7 +615,7 @@ class FOCGuiApp:
             return
 
         seq = self._next_seq()
-        frame = CtrlCmdFrame(
+        self.service.send_control(
             motor_id=self._selected_motor_id(),
             ctrl_mode=mode.value,
             target=float(dpg.get_value(self.tags["control_target"])),
@@ -1409,11 +623,10 @@ class FOCGuiApp:
             ff1=float(dpg.get_value(self.tags["control_ff1"])),
             seq=seq,
         )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.control_mode_labels), expected_seq=seq)
 
     def send_stop_command(self) -> None:
         seq = self._next_seq()
-        frame = CtrlCmdFrame(
+        self.service.send_control(
             motor_id=self._selected_motor_id(),
             ctrl_mode=CTRL_MODE_STOP,
             target=0.0,
@@ -1421,7 +634,6 @@ class FOCGuiApp:
             ff1=0.0,
             seq=seq,
         )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.control_mode_labels), expected_seq=seq)
 
     def send_param_write(self) -> None:
         param_label = str(dpg.get_value(self.tags["write_param_choice"]))
@@ -1431,30 +643,18 @@ class FOCGuiApp:
             return
 
         seq = self._next_seq()
-        frame = ParamWriteCmdFrame(
+        self.service.send_param_write(
             motor_id=self._selected_motor_id(),
             param_id=param.value,
             value=float(dpg.get_value(self.tags["write_param_value"])),
             seq=seq,
         )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.param_labels), expected_seq=seq)
-
-    def _send_query(self, query_type: int, arg0: int, arg_label: str = "") -> None:
-        seq = self._next_seq()
-        frame = QueryCmdFrame(
-            motor_id=self._selected_motor_id(),
-            query_type=query_type,
-            arg0=arg0,
-            seq=seq,
-        )
-        self._queue_frame(
-            frame.to_bytes(),
-            frame.to_summary(self.config.query_labels, arg_label=arg_label),
-            expected_seq=seq,
-        )
 
     def send_state_query(self) -> None:
-        self._send_query(QUERY_GET_STATE, 0)
+        self.service.query_state(
+            motor_id=self._selected_motor_id(),
+            seq=self._next_seq(),
+        )
 
     def send_param_query(self) -> None:
         param_label = str(dpg.get_value(self.tags["query_param_choice"]))
@@ -1462,45 +662,43 @@ class FOCGuiApp:
         if param is None:
             self._append_log("ERR", f"未知参数项: {param_label}")
             return
-        self._send_query(QUERY_GET_PARAM, param.value, arg_label=param.label)
+        self.service.query_param(
+            motor_id=self._selected_motor_id(),
+            param_id=param.value,
+            seq=self._next_seq(),
+        )
 
     def send_snapshot_query(self) -> None:
-        self._send_query(QUERY_GET_PARAM_SNAPSHOT, 0)
+        self.service.query_snapshot(
+            motor_id=self._selected_motor_id(),
+            seq=self._next_seq(),
+        )
 
     def send_calibration_query(self) -> None:
-        self._send_query(QUERY_GET_CALIB_STATUS, 0)
+        self.service.query_calibration_status(
+            motor_id=self._selected_motor_id(),
+            seq=self._next_seq(),
+        )
 
     def send_calibration_start(self) -> None:
-        seq = self._next_seq()
-        frame = CalibCmdFrame(
+        self.service.start_calibration(
             motor_id=self._selected_motor_id(),
-            calib_cmd=CALIB_CMD_START_AUTO,
-            arg0=0,
-            seq=seq,
+            seq=self._next_seq(),
         )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.calib_cmd_labels), expected_seq=seq)
 
     def send_raw_command(self) -> None:
-        try:
-            payload = parse_hex_string(str(dpg.get_value(self.tags["raw_hex"])))
-        except ValueError as exc:
-            self._append_log("ERR", str(exc))
-            return
-        self._queue_frame(payload, "原始帧发送", expected_seq=None)
+        self.service.send_raw_hex(str(dpg.get_value(self.tags["raw_hex"])))
 
     def _process_events(self) -> None:
-        while True:
-            try:
-                event_type, payload = self.events.get_nowait()
-            except Empty:
-                break
-
+        for event_type, payload in self.service.poll_events():
             if event_type == "connection":
                 self._handle_connection_event(payload)
             elif event_type == "tx":
                 self._handle_tx_event(payload)
             elif event_type == "rx":
                 self._handle_rx_event(payload)
+            elif event_type == "timeout":
+                self._handle_timeout_event(payload)
             elif event_type == "parse_error":
                 self.state.error_count += 1
                 self._append_log("ERR", str(payload))
@@ -1509,7 +707,10 @@ class FOCGuiApp:
                 self._append_log("ERR", str(payload))
 
     def _run_pollers(self) -> None:
-        if self.worker is None:
+        if not self.service.is_connected:
+            return
+
+        if self.service.is_waiting_reply:
             return
 
         now = time.monotonic()
@@ -1529,28 +730,6 @@ class FOCGuiApp:
                 self.send_calibration_query()
                 self.next_calib_poll_at = now + (1.0 / calib_hz)
 
-    def _check_timeouts(self) -> None:
-        if not self.pending_requests:
-            return
-
-        now = time.monotonic()
-        expired: List[int] = []
-
-        for seq, pending in self.pending_requests.items():
-            if (now - pending.timestamp) >= REQUEST_TIMEOUT_SECONDS:
-                expired.append(seq)
-
-        for seq in expired:
-            pending = self.pending_requests.pop(seq, None)
-            if pending is None:
-                continue
-            self.state.timeout_count += 1
-            self.state.last_ack_text = f"seq={seq} 请求超时: {pending.summary}"
-            self._append_log("ERR", self.state.last_ack_text)
-
-        if expired:
-            self._refresh_stats_only()
-
     def _handle_connection_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
         connected = bool(info.get("connected"))
@@ -1559,37 +738,56 @@ class FOCGuiApp:
         dpg.set_value(self.tags["status_text"], message or ("已连接" if connected else "未连接"))
         self._append_log("SYS", message or ("已连接" if connected else "已断开"))
 
-        if not connected:
-            self.worker = None
-            self.pending_requests.clear()
-
     def _handle_tx_event(self, payload: object) -> None:
         if not isinstance(payload, dict):
             return
 
         summary = str(payload.get("summary", "发送数据"))
         raw = payload.get("payload", b"")
-        expected_seq = payload.get("expected_seq")
 
         self._append_log("TX", f"{summary} | {format_hex(raw)}")
-        if isinstance(expected_seq, int):
-            self.pending_requests[expected_seq] = PendingRequest(
-                seq=expected_seq,
-                summary=summary,
-                timestamp=time.monotonic(),
-            )
 
-    def _reply_to_summary(self, reply: ParsedReply) -> str:
+    def _handle_timeout_event(self, payload: object) -> None:
+        if not isinstance(payload, dict):
+            return
+
+        seq = int(payload.get("seq", 0))
+        summary = str(payload.get("summary", "请求"))
+        elapsed_ms = float(payload.get("elapsed_ms", 0.0))
+        self.state.timeout_count += 1
+        self.state.last_ack_text = f"seq={seq} 请求超时: {summary} ({elapsed_ms:.1f} ms)"
+        self._append_log("ERR", self.state.last_ack_text)
+        self._refresh_stats_only()
+
+    def _reply_to_summary(self, reply: object) -> str:
         if isinstance(reply, AckReply):
-            return reply.to_summary(self.config.ack_cmd_labels, self.config.result_labels)
+            cmd_name = self.config.ack_cmd_labels.get(reply.cmd_type, f"命令 {reply.cmd_type}")
+            result_name = self.config.result_labels.get(reply.result_code, f"结果 {reply.result_code}")
+            return f"ACK ID={reply.motor_id} seq={reply.seq} cmd={cmd_name} result={result_name}"
         if isinstance(reply, StateReply):
-            return reply.to_summary(self.config.control_mode_labels)
+            mode_name = self.config.control_mode_labels.get(reply.control_mode, f"模式 {reply.control_mode}")
+            return (
+                f"STATE ID={reply.motor_id} seq={reply.seq} mode={mode_name} "
+                f"target={reply.target:.3f} vel={reply.velocity:.3f} "
+                f"out={reply.output:.3f} pos={reply.position:.3f} "
+                f"Vbus={reply.voltage:.3f} status=0x{reply.health_status:02X}"
+                f"({parse_status(reply.health_status)})"
+            )
         if isinstance(reply, ParamValueReply):
-            return reply.to_summary(self.config.param_labels)
+            param_name = self.config.param_labels.get(reply.param_id, f"参数 {reply.param_id}")
+            return f"PARAM ID={reply.motor_id} seq={reply.seq} {param_name}={reply.value:.6f}"
         if isinstance(reply, ParamSnapshotReply):
-            return reply.to_summary()
+            return (
+                f"SNAPSHOT ID={reply.motor_id} seq={reply.seq} "
+                f"version={reply.snapshot_version} pole_pairs={reply.snapshot.motor_pole_pairs} "
+                f"vel_limit={reply.snapshot.velocity_limit:.3f}"
+            )
         if isinstance(reply, CalibStatusReply):
-            return reply.to_summary(self.config.calib_state_labels)
+            state_name = self.config.calib_state_labels.get(reply.calib_state, f"状态 {reply.calib_state}")
+            return (
+                f"CALIB ID={reply.motor_id} seq={reply.seq} "
+                f"state={state_name} progress={reply.progress}%"
+            )
         return "未知回复"
 
     def _handle_rx_event(self, payload: object) -> None:
@@ -1604,11 +802,13 @@ class FOCGuiApp:
         self.state.reply_count += 1
         self.state.last_raw_hex = format_hex(raw)
         summary = self._reply_to_summary(reply)
-        pending = self.pending_requests.pop(reply.seq, None)
+        matched_summary = payload.get("matched_summary")
+        latency_ms = payload.get("latency_ms")
 
-        if pending is not None:
-            latency_ms = (time.monotonic() - pending.timestamp) * 1000.0
-            self.state.last_ack_text = f"seq={reply.seq} <- {pending.summary} ({latency_ms:.1f} ms)"
+        if matched_summary is not None and latency_ms is not None:
+            self.state.last_ack_text = (
+                f"seq={reply.seq} <- {matched_summary} ({float(latency_ms):.1f} ms)"
+            )
         else:
             self.state.last_ack_text = f"seq={reply.seq} 未匹配待确认请求"
 

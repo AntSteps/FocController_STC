@@ -1,8 +1,4 @@
-
-#include "config.h"                     //默认已包含stdio.h、intrins.h等头文件
-
-//<<AICUBE_USER_INCLUDE_BEGIN>>
-// 在此添加用户头文件包含
+#include "config.h" //默认已包含stdio.h、intrins.h等头文件
 #include "encoder.h"
 #include "pwm.h"
 #include "svpwm.h"
@@ -11,11 +7,8 @@
 #include "uart_controller.h"
 #include "command.h"
 #include "calibration_service.h"
-//<<AICUBE_USER_INCLUDE_END>>
+#include "motor.h"
 
-
-//<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
-// 在此添加用户全局变量定义、用户宏定义以及函数声明
 void main(void)
 {
     ProtocolRequest request;
@@ -25,20 +18,21 @@ void main(void)
 
     ParamStorage_Init();
     ParamRegistry_ApplyAllRuntime();
-    CalibrationService_Init();
     ProtocolController_Init();
+    CalibrationService_Init();
 
-    TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
+    Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);          //初始为电机停止
+
+    TIMER0_Run(); /* 启动定时器 开始foc控制循环 */
 
     while (1)
     {
-        ProtocolController_PumpRx();
-        CalibrationService_Poll();
-
-        while (ProtocolController_PopRequest(&request))
+        if (ProtocolController_PumpRx(&request))
         {
             ProcessCommand(&request);
         }
+
+        CalibrationService_Poll();
     }
 }
 
@@ -49,27 +43,27 @@ void main(void)
 ////////////////////////////////////////
 void SYS_Init(void)
 {
-    EnableAccessXFR();                  //使能访问扩展XFR
-    AccessCodeFastest();                //设置最快速度访问程序代码
-    AccessIXramFastest();               //设置最快速度访问内部XDATA
-    IAP_SetTimeBase();                  //设置IAP等待参数,产生1us时基
+    EnableAccessXFR();    // 使能访问扩展XFR
+    AccessCodeFastest();  // 设置最快速度访问程序代码
+    AccessIXramFastest(); // 设置最快速度访问内部XDATA
+    IAP_SetTimeBase();    // 设置IAP等待参数,产生1us时基
 
     //<<AICUBE_USER_PREINITIAL_CODE_BEGIN>>
     // 在此添加用户预初始化代码
     //<<AICUBE_USER_PREINITIAL_CODE_END>>
 
-    PORT0_Init();   // P0口初始化
-    PORT1_Init();   // P1口初始化
-    PORT2_Init();   // P2口初始化
-    PORT3_Init();   // P3口初始化
-    PORT5_Init();   // P5口初始化
-    CLK_Init();     // 时钟模块初始化
-    TIMER0_Init();  // 定时器0初始化
-    TIMER3_Init();  // 定时器3初始化
-    UART3_Init();   // 串口3初始化
-    ADC_Init();     // ADC初始化
-    SPI_Init();     // SPI初始化
-    PWMA_Init();    /* 高级PWMA初始化 */
+    PORT0_Init();  // P0口初始化
+    PORT1_Init();  // P1口初始化
+    PORT2_Init();  // P2口初始化
+    PORT3_Init();  // P3口初始化
+    PORT5_Init();  // P5口初始化
+    CLK_Init();    // 时钟模块初始化
+    TIMER0_Init(); // 定时器0初始化
+    TIMER3_Init(); // 定时器3初始化
+    UART3_Init();  // 串口3初始化
+    ADC_Init();    // ADC初始化
+    SPI_Init();    // SPI初始化
+    PWMA_Init();   /* 高级PWMA初始化 */
     Motor_PowerOn_SelfTest();
     MATHLIB_Init(); /* MATH库初始化 */
     SVPWM_Init();   /* SVPWM初始化 */
@@ -81,7 +75,7 @@ void SYS_Init(void)
 
     //<<AICUBE_USER_INITIAL_CODE_END>>
 
-    EnableGlobalInt();                  //使能全局中断
+    EnableGlobalInt(); // 使能全局中断
 }
 
 ////////////////////////////////////////
@@ -93,9 +87,8 @@ void delay_us(uint16_t us)
 {
     do
     {
-        NOP(34);                        //(MAIN_Fosc + 500000) / 1000000 - 6
+        NOP(34); //(MAIN_Fosc + 500000) / 1000000 - 6
     } while (--us);
-
 }
 
 ////////////////////////////////////////
@@ -110,14 +103,7 @@ void delay_ms(uint16_t ms)
     do
     {
         i = MAIN_Fosc / 6000;
-        while (--i);
+        while (--i)
+            ;
     } while (--ms);
 }
-
-
-//<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
-// 在此添加用户函数实现代码
-
-//<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
-
-

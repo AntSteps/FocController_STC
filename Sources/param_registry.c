@@ -235,7 +235,7 @@ void ParamRegistry_ApplyAllRuntime(void)
     params = ParamStorage_Get();
     Motor_Calibration_Init(&params->motor_calib);
     SpeedController_Init(&params->speed_ctrl_params);
-    Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
+
 }
 
 ProtocolResultCode ParamRegistry_ReadParam(uint8_t param_id, float *value)

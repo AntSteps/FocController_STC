@@ -32,7 +32,8 @@
 void PORT0_Init(void)
 {
     SetP0nInitLevelHigh(PIN_ALL);       //设置P0初始化电平
-    SetP0nQuasiMode(PIN_7 | PIN_3 | PIN_2 | PIN_1 | PIN_0); //设置P0.7,P0.3,P0.2,P0.1,P0.0为准双向口模式
+    SetP0nQuasiMode(PIN_7 | PIN_2 | PIN_1 | PIN_0); //设置P0.7,P0.3,P0.2,P0.1,P0.0为准双向口模式
+    SetP0nPushPullMode(PIN_3);
     SetP0nHighZInputMode(PIN_6 | PIN_5 | PIN_4); //设置P0.6,P0.5,P0.4为高阻输入模式
 
     DisableP0nPullUp(PIN_ALL);          //关闭P0内部上拉电阻
