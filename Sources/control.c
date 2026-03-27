@@ -145,6 +145,16 @@ float SpeedController_GetTarget(void)
     return g_speed_ctrl.target_speed;
 }
 
+float SpeedController_GetFilteredSpeed(void)
+{
+    return g_speed_ctrl.filtered_speed;
+}
+
+float SpeedController_GetOutput(void)
+{
+    return g_speed_ctrl.total_output;
+}
+
 float SpeedController_Update(float mechanical_angle)
 {
     float delta_angle, raw_speed, speed_error;
@@ -209,6 +219,15 @@ void SpeedController_Reset(void)
     g_speed_ctrl.pi_output = 0.0f;
     g_speed_ctrl.ff_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+}
+
+void SpeedController_RefreshParams(SpeedController_Params_t *params)
+{
+    float target_speed;
+
+    target_speed = g_speed_ctrl.target_speed;
+    SpeedController_Init(params);
+    g_speed_ctrl.target_speed = target_speed;
 }
 
 void SpeedController_SetFeedForwardGain(float velocity_gain)

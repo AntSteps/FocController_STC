@@ -14,10 +14,13 @@
 //<<AICUBE_USER_INCLUDE_BEGIN>>
 // 在此添加用户头文件包含
 #include "motor.h"
+#include "timer.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
+static volatile uint32_t s_tick_ms = 0ul;
+static uint8_t s_tick_divider = 0u;
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 ////////////////////////////////////////
@@ -79,13 +82,32 @@ void TIMER0_ISR(void) interrupt TMR0_VECTOR
 {
     //<<AICUBE_USER_TIMER0_ISR_CODE1_BEGIN>>
     // 在此添加中断函数用户代码
-    // P36=1;
+    P36=1;
     Motor_Update();    // 5kHz换相，内部处理300Hz速度环
-    // P36=0;
+    P36=0;
+
+    s_tick_divider++;
+    if (s_tick_divider >= 5u)
+    {
+        s_tick_divider = 0u;
+        s_tick_ms++;
+    }
 
     //<<AICUBE_USER_TIMER0_ISR_CODE1_END>>
 }
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
 // 在此添加用户函数实现代码
+uint32_t Timer_GetTickMs(void)
+{
+    uint32_t tick;
+    uint8_t ea_state;
+
+    ea_state = EA;
+    DisableGlobalInt();
+    tick = s_tick_ms;
+    EA = ea_state;
+
+    return tick;
+}
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>

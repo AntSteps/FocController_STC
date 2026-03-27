@@ -1,196 +1,225 @@
+#include "command.h"
 #include "uart_controller.h"
-#include "uart_send_def.h"
+#include "param_registry.h"
+#include "telemetry_service.h"
+#include "calibration_service.h"
 #include "param_storage.h"
-#include "calibration.h"
-#include "encoder.h"
-#include "adc.h"
 #include "motor.h"
+#include "control.h"
 
-#define REPLY_STATUS_ENCODER_FAULT      0x01u
-#define REPLY_STATUS_MOTOR_FAULT        0x02u
-#define REPLY_STATUS_ENC_MAG_SHIFT      2u
-#define REPLY_STATUS_ENC_PRESS          0x10u
-#define REPLY_STATUS_ENC_OVERSPEED      0x20u
-#define REPLY_STATUS_ENC_DATA_GOOD      0x40u
-#define REPLY_STATUS_PARAM_FROM_EEPROM  0x80u
-
-static void Command_DebugPulse(uint8_t count)
+typedef struct
 {
-    while (count--)
+    uint8_t mode_id;
+    uint8_t requires_target;
+} ControlModeOps;
+
+static const ControlModeOps s_control_mode_table[] =
+{
+    { PROTOCOL_CTRL_MODE_STOP, 0u },
+    { PROTOCOL_CTRL_MODE_SPEED, 1u }
+};
+static ProtocolReply s_command_reply;
+
+static const ControlModeOps *Command_FindControlMode(uint8_t mode_id)
+{
+    uint8_t index;
+
+    for (index = 0u; index < (uint8_t)(sizeof(s_control_mode_table) / sizeof(s_control_mode_table[0])); index++)
     {
-        P36 = 1;
-        delay_us(20);
-        P36 = 0;
-        delay_us(20);
+        if (s_control_mode_table[index].mode_id == mode_id)
+        {
+            return &s_control_mode_table[index];
+        }
     }
+
+    return (const ControlModeOps *)0;
 }
 
-static void ApplyControlCommand(CtrlCmdFrame *frame);
-static void ApplyParamCommand(ParamCmdFrame *frame);
-static uint8_t Command_BuildReplyStatus(void);
-void UartReply(uint8_t seq);
-void ProcessCommand(UartCommand *command)
+static void Command_SendReply(const ProtocolReply *reply)
 {
-    Command_DebugPulse(10);
-
-    switch (command->type)
-    {
-    case UART_COMMAND_CTRL:
-        ApplyControlCommand(&command->ctrl);
-        UartReply(command->ctrl.seq); // 立即回复当前状态
-        break;
-
-    case UART_COMMAND_PARAM:
-        ApplyParamCommand(&command->param);
-        break;
-
-    default:
-        break;
-    }
+    (void)ProtocolController_SendReply(reply);
 }
 
-static void ApplyControlCommand(CtrlCmdFrame *frame)
+static ProtocolResultCode Command_HandleControl(const ProtocolRequest *request)
 {
+    const ControlModeOps *mode_ops;
     ParamStorage_Data_t *params;
     float target;
 
-    params = ParamStorage_Get();
-    switch (frame->ctrl)
+    mode_ops = Command_FindControlMode(request->control_mode);
+    if (mode_ops == (const ControlModeOps *)0)
     {
-    case 0:
+        return PROTOCOL_RESULT_UNSUPPORTED;
+    }
+
+    params = ParamStorage_Get();
+    target = request->target;
+
+    if (mode_ops->requires_target)
+    {
+        if ((target > params->velocity_limit) || (target < -params->velocity_limit))
+        {
+            return PROTOCOL_RESULT_INVALID_VALUE;
+        }
+    }
+
+    switch (mode_ops->mode_id)
+    {
+    case PROTOCOL_CTRL_MODE_STOP:
         SpeedController_SetTarget(0.0f);
+        Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
         break;
 
-    case 1:
-        target = frame->target;
-        if (target > params->velocity_limit)
-        {
-            target = params->velocity_limit;
-        }
-        else if (target < -params->velocity_limit)
-        {
-            target = -params->velocity_limit;
-        }
+    case PROTOCOL_CTRL_MODE_SPEED:
         SpeedController_SetTarget(target);
+        Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);
         break;
 
     default:
+        return PROTOCOL_RESULT_UNSUPPORTED;
+    }
+
+    return PROTOCOL_RESULT_OK;
+}
+
+static void Command_HandleQuery(const ProtocolRequest *request)
+{
+    ProtocolResultCode result;
+    float value;
+
+    if (CalibrationService_IsBusy())
+    {
+        if (!((request->query_type == PROTOCOL_QUERY_GET_STATE) ||
+              (request->query_type == PROTOCOL_QUERY_GET_CALIB_STATUS)))
+        {
+            TelemetryService_BuildAckReply(&s_command_reply,
+                                           PROTOCOL_REQUEST_QUERY,
+                                           PROTOCOL_RESULT_BUSY,
+                                           request->seq);
+            Command_SendReply(&s_command_reply);
+            return;
+        }
+    }
+
+    switch (request->query_type)
+    {
+    case PROTOCOL_QUERY_GET_STATE:
+        TelemetryService_BuildStateReply(&s_command_reply, request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
+
+    case PROTOCOL_QUERY_GET_PARAM:
+        result = ParamRegistry_ReadParam(request->arg0, &value);
+        if (result != PROTOCOL_RESULT_OK)
+        {
+            TelemetryService_BuildAckReply(&s_command_reply,
+                                           PROTOCOL_REQUEST_QUERY,
+                                           (uint8_t)result,
+                                           request->seq);
+        }
+        else
+        {
+            TelemetryService_BuildParamValueReply(&s_command_reply,
+                                                  request->seq,
+                                                  request->arg0,
+                                                  value);
+        }
+        Command_SendReply(&s_command_reply);
+        break;
+
+    case PROTOCOL_QUERY_GET_PARAM_SNAPSHOT:
+        TelemetryService_BuildParamSnapshotReply(&s_command_reply, request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
+
+    case PROTOCOL_QUERY_GET_CALIB_STATUS:
+        TelemetryService_BuildCalibStatusReply(&s_command_reply,
+                                               request->seq,
+                                               CalibrationService_GetState(),
+                                               CalibrationService_GetProgress());
+        Command_SendReply(&s_command_reply);
+        break;
+
+    default:
+        TelemetryService_BuildAckReply(&s_command_reply,
+                                       PROTOCOL_REQUEST_QUERY,
+                                       PROTOCOL_RESULT_UNSUPPORTED,
+                                       request->seq);
+        Command_SendReply(&s_command_reply);
         break;
     }
 }
 
-static void ApplyParamCommand(ParamCmdFrame *frame)
+void ProcessCommand(const ProtocolRequest *request)
 {
-    ParamStorage_Data_t *params;
+    ProtocolResultCode result;
 
-    params = ParamStorage_Get();
-    switch (frame->param)
+    if (request == (const ProtocolRequest *)0)
     {
-    case PARAM_CMD_ID_VEL_KP:
-        params->speed_ctrl_params.kp = frame->value;
-        if (g_speed_ctrl.params != NULL)
-        {
-            PI_Init(&g_speed_ctrl.pi,
-                    params->speed_ctrl_params.kp,
-                    params->speed_ctrl_params.ki,
-                    params->speed_ctrl_params.out_max,
-                    params->speed_ctrl_params.out_min);
-        }
-        break;
-
-    case PARAM_CMD_ID_VEL_KI:
-        params->speed_ctrl_params.ki = frame->value;
-        if (g_speed_ctrl.params != NULL)
-        {
-            PI_Init(&g_speed_ctrl.pi,
-                    params->speed_ctrl_params.kp,
-                    params->speed_ctrl_params.ki,
-                    params->speed_ctrl_params.out_max,
-                    params->speed_ctrl_params.out_min);
-        }
-        break;
-
-    case PARAM_CMD_ID_VEL_LIMIT:
-        params->velocity_limit = frame->value;
-        break;
-
-    case PARAM_CMD_ID_CUR_LIMIT:
-        params->current_limit = frame->value;
-        break;
-
-    case PARAM_CMD_ID_FF_GAIN:
-        params->speed_ctrl_params.ff.velocity_gain = frame->value;
-        break;
-
-    case PARAM_CMD_ID_FF_ENABLE:
-        params->speed_ctrl_params.enable_feedforward = (uint8_t)(frame->value != 0.0f);
-        break;
-
-    default:
         return;
     }
 
-    ParamStorage_Save();
-}
-
-static uint8_t Command_BuildReplyStatus(void)
-{
-    uint8_t status;
-    uint8_t data_good;
-    uint8_t mag_field_status;
-    uint8_t speed_status;
-
-    status = 0u;
-    data_good = Encoder_Get_DataGood();
-    mag_field_status = Encoder_Get_MagFieldStatus();
-    speed_status = Encoder_Get_SpeedStatus();
-
-    if (data_good)
+    switch (request->kind)
     {
-        status |= REPLY_STATUS_ENC_DATA_GOOD;
+    case PROTOCOL_REQUEST_CTRL:
+        if (CalibrationService_IsBusy())
+        {
+            result = PROTOCOL_RESULT_BUSY;
+        }
+        else
+        {
+            result = Command_HandleControl(request);
+        }
+        TelemetryService_BuildAckReply(&s_command_reply,
+                                       PROTOCOL_REQUEST_CTRL,
+                                       (uint8_t)result,
+                                       request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
+
+    case PROTOCOL_REQUEST_PARAM_WRITE:
+        if (CalibrationService_IsBusy())
+        {
+            result = PROTOCOL_RESULT_BUSY;
+        }
+        else
+        {
+            result = ParamRegistry_WriteParam(request->param_id,
+                                              request->value);
+        }
+        TelemetryService_BuildAckReply(&s_command_reply,
+                                       PROTOCOL_REQUEST_PARAM_WRITE,
+                                       (uint8_t)result,
+                                       request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
+
+    case PROTOCOL_REQUEST_QUERY:
+        Command_HandleQuery(request);
+        break;
+
+    case PROTOCOL_REQUEST_CALIB:
+        if (request->calib_cmd != PROTOCOL_CALIB_CMD_START_AUTO)
+        {
+            result = PROTOCOL_RESULT_UNSUPPORTED;
+        }
+        else
+        {
+            result = CalibrationService_Start();
+        }
+        TelemetryService_BuildAckReply(&s_command_reply,
+                                       PROTOCOL_REQUEST_CALIB,
+                                       (uint8_t)result,
+                                       request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
+
+    default:
+        TelemetryService_BuildAckReply(&s_command_reply,
+                                       0u,
+                                       PROTOCOL_RESULT_UNSUPPORTED,
+                                       request->seq);
+        Command_SendReply(&s_command_reply);
+        break;
     }
-
-    status |= (uint8_t)((mag_field_status & 0x03u) << REPLY_STATUS_ENC_MAG_SHIFT);
-
-    if (Encoder_Get_PressStatus())
-    {
-        status |= REPLY_STATUS_ENC_PRESS;
-    }
-
-    if (speed_status)
-    {
-        status |= REPLY_STATUS_ENC_OVERSPEED;
-    }
-
-    if ((!data_good) ||
-        (mag_field_status != ENCODER_MAG_FIELD_NORMAL) ||
-        speed_status)
-    {
-        status |= REPLY_STATUS_ENCODER_FAULT;
-    }
-
-    if (ParamStorage_WasLoadedFromEEPROM())
-    {
-        status |= REPLY_STATUS_PARAM_FROM_EEPROM;
-    }
-
-    return status;
-}
-
-void UartReply(uint8_t seq)
-{
-    uint8_t send_ok;
-    ReplyFrame replyframe;
-
-
-    replyframe.head = REPLY_FRAME_HEAD;  
-    replyframe.id = 0x01;
-    replyframe.velocity = 3.14159f;
-    replyframe.output = Motor_GetQAxisVoltage();
-    replyframe.position = Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle());
-    replyframe.voltage = ADC_GetBusVoltage();
-    replyframe.status = Command_BuildReplyStatus();
-    replyframe.seq = seq;
-    send_ok = send_messages(&replyframe);
-
 }

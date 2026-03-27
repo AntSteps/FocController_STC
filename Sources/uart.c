@@ -273,6 +273,7 @@ uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len)
 
     memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
     memcpy(pu8UR3DMATxBuffer, pData, len);
+    DMA_UART3_SetTxAmount((uint16_t)(len - 1u));
     DMA_UART3_ClearTxFlag();
     RS485_DIR = 1;      // P25高电平，使能RS485发送
     DMA_UART3_TriggerTx();

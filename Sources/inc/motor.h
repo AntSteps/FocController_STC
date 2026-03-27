@@ -1,6 +1,14 @@
 #ifndef __MOTOR_H__
 #define __MOTOR_H__
 
+#include "def.h"
+
+typedef enum
+{
+    MOTOR_CONTROL_MODE_STOP = 0,
+    MOTOR_CONTROL_MODE_SPEED = 1
+} MotorControlMode;
+
 // 换相更新（在定时器中断中调用，5kHz）
 void Motor_Update(void);
 
@@ -12,5 +20,10 @@ float Motor_GetQAxisVoltage(void);
 
 // 设置直接的Q轴电压（用于测试，绕过速度环）
 void Motor_SetQAxisVoltageDirect(float voltage);
+
+void Motor_SetControlMode(uint8_t control_mode);
+uint8_t Motor_GetControlMode(void);
+void Motor_SetSuspended(BOOL suspended);
+BOOL Motor_IsSuspended(void);
 
 #endif

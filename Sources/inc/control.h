@@ -113,10 +113,16 @@ void SpeedController_Init(SpeedController_Params_t *params);
 void SpeedController_SetTarget(float target_speed);
 // 获取目标速度
 float SpeedController_GetTarget(void);
+// 获取滤波后的速度
+float SpeedController_GetFilteredSpeed(void);
+// 获取控制器总输出
+float SpeedController_GetOutput(void);
 // 更新速度环（传入当前机械角度，单位rad），返回输出（q轴电压/电流参考）
 float SpeedController_Update(float mechanical_angle);
 // 重置速度环
 void SpeedController_Reset(void);
+// 运行时刷新参数，保留目标速度
+void SpeedController_RefreshParams(SpeedController_Params_t *params);
 // 设置前馈增益
 void SpeedController_SetFeedForwardGain(float velocity_gain);
 // 使能/禁用前馈

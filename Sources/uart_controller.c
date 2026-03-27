@@ -1,83 +1,82 @@
 #include "uart_controller.h"
 #include "uart.h"
-#include "uart_send_def.h"
-#include "crc8.h"
+#include "protocol_parser.h"
 
+#define PROTOCOL_REQUEST_QUEUE_SIZE  4u
 
+static ProtocolParser s_protocol_parser;
+static ProtocolRequest s_request_queue[PROTOCOL_REQUEST_QUEUE_SIZE];
+static uint8_t s_request_read_index = 0u;
+static uint8_t s_request_write_index = 0u;
+static uint8_t s_request_count = 0u;
+static uint8_t s_protocol_tx_frame[PROTOCOL_MAX_FRAME_SIZE];
 
-static uint8_t UARTController_MatchHead(const uint8_t xdata *buf, uint8_t head0, uint8_t head1)
+static BOOL ProtocolController_EnqueueRequest(const ProtocolRequest *request)
 {
-    return (uint8_t)((buf[0] == head0) && (buf[1] == head1));
-}
-
-static void UARTController_CopyFrameFromXdata(uint8_t *dst, const uint8_t xdata *src, uint8_t size)
-{
-    uint8_t index;
-
-    for (index = 0; index < size; index++)
+    if ((request == (const ProtocolRequest *)0) || (s_request_count >= PROTOCOL_REQUEST_QUEUE_SIZE))
     {
-        dst[index] = src[index];
+        return FALSE;
     }
+
+    s_request_queue[s_request_write_index] = *request;
+    s_request_write_index = (uint8_t)((s_request_write_index + 1u) % PROTOCOL_REQUEST_QUEUE_SIZE);
+    s_request_count++;
+    return TRUE;
 }
 
-static uint8_t UARTController_CheckFrame(const uint8_t *buf, uint8_t size)
+void ProtocolController_Init(void)
 {
-    return (uint8_t)(Mem_CRC8_Check((uint8_t *)buf, size, 1) == 0);
+    ProtocolParser_Init(&s_protocol_parser);
+    s_request_read_index = 0u;
+    s_request_write_index = 0u;
+    s_request_count = 0u;
 }
 
-
-static void UARTController_ReleaseCurrentBuffer(void)
+void ProtocolController_PumpRx(void)
 {
-    UART_ReleaseRxBuffer();
-}
-
-static void UARTController_WriteU16BE(uint8_t *buf, uint16_t value)
-{
-    buf[0] = (uint8_t)(value >> 8);
-    buf[1] = (uint8_t)value;
-}
-
-static void UARTController_WriteFloatBE(uint8_t *buf, float value)
-{
-    // uint8_t raw[4];
-    // memcpy(raw, &value, 4); 
-    memcpy(buf, &value, 4);
-    // buf[0] = raw[3];
-    // buf[1] = raw[2];
-    // buf[2] = raw[1];
-    // buf[3] = raw[0];
-}
-
-uint8_t send_messages(ReplyFrame *frame)
-{
-    uint8_t tx_frame[sizeof(ReplyFrame)];
-
-    UARTController_WriteU16BE(&tx_frame[0], frame->head);
-    tx_frame[2] = frame->id;
-    UARTController_WriteFloatBE(&tx_frame[3], frame->velocity);
-    UARTController_WriteFloatBE(&tx_frame[7], frame->output);
-    UARTController_WriteFloatBE(&tx_frame[11], frame->position);
-    UARTController_WriteFloatBE(&tx_frame[15], frame->voltage);
-    tx_frame[19] = frame->status;
-    tx_frame[20] = frame->seq;
-    tx_frame[21] = Mem_CRC8_Check(tx_frame, sizeof(ReplyFrame) - 1, 0);
-
-    frame->crc8 = tx_frame[21];
-    return UART_DMA_Send(tx_frame, sizeof(ReplyFrame));
-}
-
-uint8_t UARTController_GetCommand(UartCommand *command)
-{
-    uint8_t remain;
-
     uint8_t rx_len;
-    uint8_t xdata *rx_buffer = UART_GetRxBuffer(&rx_len);
+    uint8_t xdata *rx_buffer;
+    ProtocolRequest request;
 
-    UARTController_ReleaseCurrentBuffer();
-    if (rx_len == 0 || rx_buffer == (uint8_t xdata *)0)
+    rx_buffer = UART_GetRxBuffer(&rx_len);
+    if ((rx_buffer == (uint8_t xdata *)0) || (rx_len == 0u))
     {
-        return 0;
+        return;
     }
 
-    return 1;
+    ProtocolParser_Feed(&s_protocol_parser, rx_buffer, rx_len);
+    UART_ReleaseRxBuffer();
+
+    while (ProtocolParser_Next(&s_protocol_parser, &request))
+    {
+        if (!ProtocolController_EnqueueRequest(&request))
+        {
+            break;
+        }
+    }
+}
+
+BOOL ProtocolController_PopRequest(ProtocolRequest *request)
+{
+    if ((request == (ProtocolRequest *)0) || (s_request_count == 0u))
+    {
+        return FALSE;
+    }
+
+    *request = s_request_queue[s_request_read_index];
+    s_request_read_index = (uint8_t)((s_request_read_index + 1u) % PROTOCOL_REQUEST_QUEUE_SIZE);
+    s_request_count--;
+    return TRUE;
+}
+
+BOOL ProtocolController_SendReply(const ProtocolReply *reply)
+{
+    uint8_t frame_len;
+
+    if (!ProtocolFrame_EncodeReply(reply, s_protocol_tx_frame, &frame_len))
+    {
+        return FALSE;
+    }
+
+    return (BOOL)UART_DMA_Send(s_protocol_tx_frame, frame_len);
 }

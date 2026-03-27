@@ -6,73 +6,39 @@
 #include "encoder.h"
 #include "pwm.h"
 #include "svpwm.h"
-#include "calibration.h"
 #include "param_storage.h"
-#include "control.h"
-#include "uart_send_def.h"
+#include "param_registry.h"
 #include "uart_controller.h"
 #include "command.h"
+#include "calibration_service.h"
 //<<AICUBE_USER_INCLUDE_END>>
 
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明
-
-static void LoadStoredParamsToModules(ParamStorage_Data_t *params);
-
-
-void calibrate(void){
-    ParamStorage_Data_t *params;
-    Motor_Calibration new_calib;
-
-    /* 从参数存储获取指针 */
-    params = ParamStorage_Get();
-
-    /* 执行自动校准，返回校准结果 */
-    new_calib = Motor_Calibration_AutoCalibrate(params->motor_pole_pairs);
-
-    /* 将新的校准结果应用到参数存储 */
-    params->motor_calib = new_calib;
-    ParamStorage_Save();                 /* 保存到EEPROM */
-
-    /* 应用校准参数到运行模块 */
-    Motor_Calibration_Init(&new_calib);
-}
-
-
 void main(void)
 {
-    UartCommand command;
-    ParamStorage_Data_t *params;
-    uint8_t reply_seq;
+    ProtocolRequest request;
 
     SYS_Init();
     TIMER0_Stop();
 
-    //硬件初始化之后开始模块初始化
-    Encoder_Init();
-    ParamStorage_Init();                /* 初始化参数存储，从EEPROM加载参数 */
-
-    /* 从参数存储获取指针 */
-    params = ParamStorage_Get();
-    LoadStoredParamsToModules(params);
-    // calibrate();
-
-
-    /* 将存储参数或默认参数加载到各模块 */
-
-    SpeedController_SetTarget(20.0f);
-    reply_seq = 0;
+    ParamStorage_Init();
+    ParamRegistry_ApplyAllRuntime();
+    CalibrationService_Init();
+    ProtocolController_Init();
 
     TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
 
     while (1)
-    {       
-        // if (UARTController_GetCommand(&command))
-        // {
-            UartReply(0); // 回复当前状态
-            // ProcessCommand(&command);
-        // }
+    {
+        ProtocolController_PumpRx();
+        CalibrationService_Poll();
+
+        while (ProtocolController_PopRequest(&request))
+        {
+            ProcessCommand(&request);
+        }
     }
 }
 
@@ -132,13 +98,6 @@ void delay_us(uint16_t us)
 
 }
 
-
-static void LoadStoredParamsToModules(ParamStorage_Data_t *params)
-{
-    Motor_Calibration_Init(&params->motor_calib);
-    SpeedController_Init(&params->speed_ctrl_params);
-}
-
 ////////////////////////////////////////
 // 毫秒延时函数
 // 入口参数: ms (设置延时的毫秒值)
@@ -158,13 +117,6 @@ void delay_ms(uint16_t ms)
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
 // 在此添加用户函数实现代码
-
-////////////////////////////////////////
-// 组装并发送ReplyFrame
-// 入口参数: 无
-// 函数返回: 无
-////////////////////////////////////////
-
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 

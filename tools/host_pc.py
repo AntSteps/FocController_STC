@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
+from queue import Empty, Queue
 import struct
 import threading
 import time
-from collections import deque
-from dataclasses import dataclass, field
-from queue import Empty, Queue
-from typing import Callable, Deque, Dict, List, Optional
+from typing import Callable, Deque, Dict, List, Optional, Tuple, Union
 
 import serial
 import serial.tools.list_ports
@@ -24,25 +24,97 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 
-REPLY_FRAME_HEAD = 0x0721
-CTRL_CMD_FRAME_HEAD = 0x1145
-PARAM_CMD_FRAME_HEAD = 0x1245
+ACK_REPLY_HEAD = 0x0621
+STATE_REPLY_HEAD = 0x0721
+PARAM_VALUE_REPLY_HEAD = 0x0821
+PARAM_SNAPSHOT_REPLY_HEAD = 0x0921
+CALIB_STATUS_REPLY_HEAD = 0x0A21
 
-REPLY_FRAME_FORMAT = ">H B f f f f B B B"
-CTRL_CMD_FRAME_FORMAT = ">H B B f f f B B"
-PARAM_CMD_FRAME_FORMAT = ">H B B f B B"
+CTRL_CMD_HEAD = 0x1145
+PARAM_WRITE_CMD_HEAD = 0x1245
+QUERY_CMD_HEAD = 0x1345
+CALIB_CMD_HEAD = 0x1445
 
-REPLY_FRAME_SIZE = struct.calcsize(REPLY_FRAME_FORMAT)
+QUERY_GET_STATE = 0x01
+QUERY_GET_PARAM = 0x02
+QUERY_GET_PARAM_SNAPSHOT = 0x03
+QUERY_GET_CALIB_STATUS = 0x04
+
+CALIB_CMD_START_AUTO = 0x01
+
+REQUEST_KIND_CTRL = 1
+REQUEST_KIND_PARAM_WRITE = 2
+REQUEST_KIND_QUERY = 3
+REQUEST_KIND_CALIB = 4
+
+CTRL_MODE_STOP = 0
+CTRL_MODE_SPEED = 1
+
+RESULT_OK = 0
+RESULT_BUSY = 1
+RESULT_UNSUPPORTED = 2
+RESULT_INVALID_PARAM = 3
+RESULT_INVALID_VALUE = 4
+RESULT_EEPROM_ERROR = 5
+RESULT_CALIB_FAILED = 6
+RESULT_INTERNAL_ERROR = 7
+
+CALIB_STATE_IDLE = 0
+CALIB_STATE_RUNNING = 1
+CALIB_STATE_SUCCESS = 2
+CALIB_STATE_FAIL_ENCODER = 3
+CALIB_STATE_FAIL_BUSY = 4
+CALIB_STATE_FAIL_INTERNAL = 5
+
+STATUS_ENCODER_FAULT = 0x01
+STATUS_MOTOR_FAULT = 0x02
+STATUS_ENC_MAG_MASK = 0x0C
+STATUS_ENC_MAG_SHIFT = 2
+STATUS_ENC_PRESS = 0x10
+STATUS_ENC_OVERSPEED = 0x20
+STATUS_ENC_DATA_GOOD = 0x40
+STATUS_PARAM_FROM_EEPROM = 0x80
+
+CTRL_CMD_FRAME_FORMAT = ">HBBfffBB"
+PARAM_WRITE_CMD_FRAME_FORMAT = ">HBBfBB"
+QUERY_CMD_FRAME_FORMAT = ">HBBBBB"
+CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
+
+ACK_REPLY_FRAME_FORMAT = ">HBBBBB"
+STATE_REPLY_FRAME_FORMAT = ">HBBfffffBBB"
+PARAM_VALUE_REPLY_FRAME_FORMAT = ">HBBfBB"
+PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffBfffhhhfffffBB"
+CALIB_STATUS_REPLY_FRAME_FORMAT = ">HBBBBB"
+
 CTRL_CMD_FRAME_SIZE = struct.calcsize(CTRL_CMD_FRAME_FORMAT)
-PARAM_CMD_FRAME_SIZE = struct.calcsize(PARAM_CMD_FRAME_FORMAT)
+PARAM_WRITE_CMD_FRAME_SIZE = struct.calcsize(PARAM_WRITE_CMD_FRAME_FORMAT)
+QUERY_CMD_FRAME_SIZE = struct.calcsize(QUERY_CMD_FRAME_FORMAT)
+CALIB_CMD_FRAME_SIZE = struct.calcsize(CALIB_CMD_FRAME_FORMAT)
 
-MAX_LOG_LINES = 250
+ACK_REPLY_FRAME_SIZE = struct.calcsize(ACK_REPLY_FRAME_FORMAT)
+STATE_REPLY_FRAME_SIZE = struct.calcsize(STATE_REPLY_FRAME_FORMAT)
+PARAM_VALUE_REPLY_FRAME_SIZE = struct.calcsize(PARAM_VALUE_REPLY_FRAME_FORMAT)
+PARAM_SNAPSHOT_REPLY_FRAME_SIZE = struct.calcsize(PARAM_SNAPSHOT_REPLY_FRAME_FORMAT)
+CALIB_STATUS_REPLY_FRAME_SIZE = struct.calcsize(CALIB_STATUS_REPLY_FRAME_FORMAT)
+
+MIN_REPLY_FRAME_SIZE = min(
+    ACK_REPLY_FRAME_SIZE,
+    PARAM_VALUE_REPLY_FRAME_SIZE,
+    CALIB_STATUS_REPLY_FRAME_SIZE,
+)
+
+MAX_LOG_LINES = 300
 DEFAULT_BAUDRATE = 1_000_000
 DEFAULT_HISTORY_LENGTH = 500
+DEFAULT_POLL_HZ = 10.0
+DEFAULT_CALIB_POLL_HZ = 2.0
+REQUEST_TIMEOUT_SECONDS = 1.5
 
-STATUS_FLAGS = {
-    0x01: "编码器异常",
-    0x02: "电机异常",
+MAG_FIELD_LABELS = {
+    0: "磁场正常",
+    1: "磁场过强",
+    2: "磁场过弱",
+    3: "磁场无效",
 }
 
 WINDOWS_FONT_CANDIDATES = [
@@ -54,6 +126,14 @@ WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/Deng.ttf"),
     Path("C:/Windows/Fonts/Dengb.ttf"),
 ]
+
+REPLY_FRAME_SPECS: Dict[int, Tuple[int, str]] = {
+    ACK_REPLY_HEAD: (ACK_REPLY_FRAME_SIZE, "ACK"),
+    STATE_REPLY_HEAD: (STATE_REPLY_FRAME_SIZE, "STATE"),
+    PARAM_VALUE_REPLY_HEAD: (PARAM_VALUE_REPLY_FRAME_SIZE, "PARAM"),
+    PARAM_SNAPSHOT_REPLY_HEAD: (PARAM_SNAPSHOT_REPLY_FRAME_SIZE, "SNAPSHOT"),
+    CALIB_STATUS_REPLY_HEAD: (CALIB_STATUS_REPLY_FRAME_SIZE, "CALIB"),
+}
 
 
 def crc8_check(data: bytes, has_crc: int = 0) -> int:
@@ -70,10 +150,36 @@ def crc8_check(data: bytes, has_crc: int = 0) -> int:
 
 
 def parse_status(status: int) -> str:
-    if status == 0:
-        return "就绪"
-    active_flags = [name for bit, name in STATUS_FLAGS.items() if status & bit]
-    return ", ".join(active_flags) if active_flags else "未知状态"
+    details: List[str] = []
+    mag_field = (status & STATUS_ENC_MAG_MASK) >> STATUS_ENC_MAG_SHIFT
+
+    if status & STATUS_ENCODER_FAULT:
+        details.append("编码器异常")
+    else:
+        details.append("编码器正常")
+
+    if status & STATUS_MOTOR_FAULT:
+        details.append("电机异常")
+
+    details.append(MAG_FIELD_LABELS.get(mag_field, f"磁场未知({mag_field})"))
+
+    if status & STATUS_ENC_DATA_GOOD:
+        details.append("数据有效")
+    else:
+        details.append("数据无效")
+
+    if status & STATUS_ENC_PRESS:
+        details.append("按压触发")
+
+    if status & STATUS_ENC_OVERSPEED:
+        details.append("超速标志")
+
+    if status & STATUS_PARAM_FROM_EEPROM:
+        details.append("参数来自EEPROM")
+    else:
+        details.append("参数未从EEPROM加载")
+
+    return ", ".join(details)
 
 
 def format_hex(data: bytes) -> str:
@@ -84,7 +190,7 @@ def parse_hex_string(text: str) -> bytes:
     cleaned = text.replace(",", " ").replace("0x", " ").replace("0X", " ")
     tokens = [token for token in cleaned.split() if token]
     if not tokens:
-        raise ValueError("请输入十六进制字节，例如 11 45 01 00 ...")
+        raise ValueError("请输入十六进制字节，例如 13 45 01 01 00 01")
     return bytes(int(token, 16) & 0xFF for token in tokens)
 
 
@@ -95,53 +201,33 @@ def find_cjk_font() -> Optional[Path]:
     return None
 
 
+def pack_frame(fmt: str, *values: object) -> bytes:
+    payload = struct.pack(fmt, *values)
+    crc = crc8_check(payload, has_crc=1)
+    return payload[:-1] + bytes([crc])
+
+
+def unpack_frame(fmt: str, data: bytes, expected_head: int, frame_name: str) -> Tuple[object, ...]:
+    if len(data) != struct.calcsize(fmt):
+        raise ValueError(f"{frame_name} 长度错误: {len(data)}")
+    values = struct.unpack(fmt, data)
+    head = int(values[0])
+    if head != expected_head:
+        raise ValueError(f"{frame_name} 帧头错误: 0x{head:04X}")
+    calc_crc = crc8_check(data, has_crc=1)
+    recv_crc = int(values[-1])
+    if calc_crc != recv_crc:
+        raise ValueError(
+            f"{frame_name} CRC 错误: 计算 0x{calc_crc:02X}, 接收 0x{recv_crc:02X}"
+        )
+    return values
+
+
 @dataclass(frozen=True)
 class ChoiceOption:
     value: int
     label: str
     description: str = ""
-
-
-@dataclass
-class ReplyFrame:
-    motor_id: int
-    velocity: float
-    output: float
-    position: float
-    voltage: float
-    status: int
-    seq: int
-    crc8: int
-    head: int = REPLY_FRAME_HEAD
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "ReplyFrame":
-        if len(data) != REPLY_FRAME_SIZE:
-            raise ValueError(f"ReplyFrame 长度错误: {len(data)}")
-        head, motor_id, velocity, output, position, voltage, status, seq, crc8 = struct.unpack(
-            REPLY_FRAME_FORMAT, data
-        )
-        if head != REPLY_FRAME_HEAD:
-            raise ValueError(f"ReplyFrame 帧头错误: 0x{head:04X}")
-        calc_crc = crc8_check(data, has_crc=1)
-        if calc_crc != crc8:
-            raise ValueError(f"ReplyFrame CRC 错误: 计算 0x{calc_crc:02X}, 接收 0x{crc8:02X}")
-        return cls(
-            motor_id=motor_id,
-            velocity=velocity,
-            output=output,
-            position=position,
-            voltage=voltage,
-            status=status,
-            seq=seq,
-            crc8=crc8,
-        )
-
-    def to_summary(self) -> str:
-        return (
-            f"ID={self.motor_id} seq={self.seq} vel={self.velocity:.3f} "
-            f"out={self.output:.3f} pos={self.position:.3f} Vbus={self.voltage:.3f}"
-        )
 
 
 @dataclass
@@ -152,10 +238,10 @@ class CtrlCmdFrame:
     ff0: float
     ff1: float
     seq: int
-    head: int = CTRL_CMD_FRAME_HEAD
+    head: int = CTRL_CMD_HEAD
 
     def to_bytes(self) -> bytes:
-        payload = struct.pack(
+        return pack_frame(
             CTRL_CMD_FRAME_FORMAT,
             self.head,
             self.motor_id & 0xFF,
@@ -166,28 +252,27 @@ class CtrlCmdFrame:
             self.seq & 0xFF,
             0,
         )
-        crc = crc8_check(payload, has_crc=1)
-        return payload[:-1] + bytes([crc])
 
     def to_summary(self, labels: Dict[int, str]) -> str:
         mode_label = labels.get(self.ctrl_mode, f"模式 {self.ctrl_mode}")
         return (
-            f"控制命令 ID={self.motor_id} seq={self.seq} mode={mode_label} "
-            f"target={self.target:.3f} ff=[{self.ff0:.3f}, {self.ff1:.3f}]"
+            f"控制命令 ID={self.motor_id} seq={self.seq} "
+            f"mode={mode_label} target={self.target:.3f} "
+            f"ff=[{self.ff0:.3f}, {self.ff1:.3f}]"
         )
 
 
 @dataclass
-class ParamCmdFrame:
+class ParamWriteCmdFrame:
     motor_id: int
     param_id: int
     value: float
     seq: int
-    head: int = PARAM_CMD_FRAME_HEAD
+    head: int = PARAM_WRITE_CMD_HEAD
 
     def to_bytes(self) -> bytes:
-        payload = struct.pack(
-            PARAM_CMD_FRAME_FORMAT,
+        return pack_frame(
+            PARAM_WRITE_CMD_FRAME_FORMAT,
             self.head,
             self.motor_id & 0xFF,
             self.param_id & 0xFF,
@@ -195,15 +280,364 @@ class ParamCmdFrame:
             self.seq & 0xFF,
             0,
         )
-        crc = crc8_check(payload, has_crc=1)
-        return payload[:-1] + bytes([crc])
 
     def to_summary(self, labels: Dict[int, str]) -> str:
         param_label = labels.get(self.param_id, f"参数 {self.param_id}")
         return (
-            f"参数命令 ID={self.motor_id} seq={self.seq} param={param_label} "
-            f"value={self.value:.6f}"
+            f"参数写入 ID={self.motor_id} seq={self.seq} "
+            f"param={param_label} value={self.value:.6f}"
         )
+
+
+@dataclass
+class QueryCmdFrame:
+    motor_id: int
+    query_type: int
+    arg0: int
+    seq: int
+    head: int = QUERY_CMD_HEAD
+
+    def to_bytes(self) -> bytes:
+        return pack_frame(
+            QUERY_CMD_FRAME_FORMAT,
+            self.head,
+            self.motor_id & 0xFF,
+            self.query_type & 0xFF,
+            self.arg0 & 0xFF,
+            self.seq & 0xFF,
+            0,
+        )
+
+    def to_summary(self, query_labels: Dict[int, str], arg_label: str = "") -> str:
+        query_name = query_labels.get(self.query_type, f"查询 {self.query_type}")
+        suffix = f" arg={arg_label}" if arg_label else ""
+        return f"查询命令 ID={self.motor_id} seq={self.seq} {query_name}{suffix}"
+
+
+@dataclass
+class CalibCmdFrame:
+    motor_id: int
+    calib_cmd: int
+    arg0: int
+    seq: int
+    head: int = CALIB_CMD_HEAD
+
+    def to_bytes(self) -> bytes:
+        return pack_frame(
+            CALIB_CMD_FRAME_FORMAT,
+            self.head,
+            self.motor_id & 0xFF,
+            self.calib_cmd & 0xFF,
+            self.arg0 & 0xFF,
+            self.seq & 0xFF,
+            0,
+        )
+
+    def to_summary(self, labels: Dict[int, str]) -> str:
+        calib_name = labels.get(self.calib_cmd, f"校准命令 {self.calib_cmd}")
+        return f"校准命令 ID={self.motor_id} seq={self.seq} {calib_name}"
+
+
+@dataclass
+class AckReply:
+    motor_id: int
+    cmd_type: int
+    result_code: int
+    seq: int
+    crc8: int
+    head: int = ACK_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "AckReply":
+        values = unpack_frame(ACK_REPLY_FRAME_FORMAT, data, ACK_REPLY_HEAD, "AckReply")
+        _, motor_id, cmd_type, result_code, seq, crc8 = values
+        return cls(
+            motor_id=int(motor_id),
+            cmd_type=int(cmd_type),
+            result_code=int(result_code),
+            seq=int(seq),
+            crc8=int(crc8),
+        )
+
+    def to_summary(self, cmd_labels: Dict[int, str], result_labels: Dict[int, str]) -> str:
+        cmd_name = cmd_labels.get(self.cmd_type, f"命令 {self.cmd_type}")
+        result_name = result_labels.get(self.result_code, f"结果 {self.result_code}")
+        return f"ACK ID={self.motor_id} seq={self.seq} cmd={cmd_name} result={result_name}"
+
+
+@dataclass
+class StateReply:
+    motor_id: int
+    control_mode: int
+    target: float
+    velocity: float
+    output: float
+    position: float
+    voltage: float
+    health_status: int
+    seq: int
+    crc8: int
+    head: int = STATE_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "StateReply":
+        values = unpack_frame(STATE_REPLY_FRAME_FORMAT, data, STATE_REPLY_HEAD, "StateReply")
+        (
+            _,
+            motor_id,
+            control_mode,
+            target,
+            velocity,
+            output,
+            position,
+            voltage,
+            health_status,
+            seq,
+            crc8,
+        ) = values
+        return cls(
+            motor_id=int(motor_id),
+            control_mode=int(control_mode),
+            target=float(target),
+            velocity=float(velocity),
+            output=float(output),
+            position=float(position),
+            voltage=float(voltage),
+            health_status=int(health_status),
+            seq=int(seq),
+            crc8=int(crc8),
+        )
+
+    def to_summary(self, mode_labels: Dict[int, str]) -> str:
+        mode_name = mode_labels.get(self.control_mode, f"模式 {self.control_mode}")
+        return (
+            f"STATE ID={self.motor_id} seq={self.seq} mode={mode_name} "
+            f"target={self.target:.3f} vel={self.velocity:.3f} "
+            f"out={self.output:.3f} pos={self.position:.3f} "
+            f"Vbus={self.voltage:.3f} status=0x{self.health_status:02X}"
+            f"({parse_status(self.health_status)})"
+        )
+
+
+@dataclass
+class ParamValueReply:
+    motor_id: int
+    param_id: int
+    value: float
+    seq: int
+    crc8: int
+    head: int = PARAM_VALUE_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "ParamValueReply":
+        values = unpack_frame(
+            PARAM_VALUE_REPLY_FRAME_FORMAT,
+            data,
+            PARAM_VALUE_REPLY_HEAD,
+            "ParamValueReply",
+        )
+        _, motor_id, param_id, value, seq, crc8 = values
+        return cls(
+            motor_id=int(motor_id),
+            param_id=int(param_id),
+            value=float(value),
+            seq=int(seq),
+            crc8=int(crc8),
+        )
+
+    def to_summary(self, param_labels: Dict[int, str]) -> str:
+        param_name = param_labels.get(self.param_id, f"参数 {self.param_id}")
+        return (
+            f"PARAM ID={self.motor_id} seq={self.seq} "
+            f"{param_name}={self.value:.6f}"
+        )
+
+
+@dataclass
+class ParamSnapshot:
+    motor_pole_pairs: int
+    motor_phase_resistance: float
+    motor_phase_inductance: float
+    cur_kp: float
+    cur_ki: float
+    speed_kp: float
+    speed_ki: float
+    speed_out_max: float
+    speed_out_min: float
+    speed_lpf_time_constant_ms: float
+    ff_velocity_gain: float
+    ff_acceleration_gain: float
+    ff_friction_compensation: float
+    ff_enable: int
+    speed_sample_freq_hz: float
+    current_limit: float
+    velocity_limit: float
+    encoder_offset: int
+    calib_pole_pairs: int
+    calib_dir: int
+    calib_electrical_offset_rad: float
+    calib_harmonic_amp_1: float
+    calib_harmonic_phase_1: float
+    calib_harmonic_amp_2: float
+    calib_harmonic_phase_2: float
+
+    def to_lines(self) -> List[str]:
+        return [
+            f"motor_pole_pairs = {self.motor_pole_pairs}",
+            f"motor_phase_resistance = {self.motor_phase_resistance:.6f}",
+            f"motor_phase_inductance = {self.motor_phase_inductance:.6f}",
+            f"cur_kp = {self.cur_kp:.6f}",
+            f"cur_ki = {self.cur_ki:.6f}",
+            f"speed_kp = {self.speed_kp:.6f}",
+            f"speed_ki = {self.speed_ki:.6f}",
+            f"speed_out_max = {self.speed_out_max:.6f}",
+            f"speed_out_min = {self.speed_out_min:.6f}",
+            f"speed_lpf_time_constant_ms = {self.speed_lpf_time_constant_ms:.6f}",
+            f"ff_velocity_gain = {self.ff_velocity_gain:.6f}",
+            f"ff_acceleration_gain = {self.ff_acceleration_gain:.6f}",
+            f"ff_friction_compensation = {self.ff_friction_compensation:.6f}",
+            f"ff_enable = {self.ff_enable}",
+            f"speed_sample_freq_hz = {self.speed_sample_freq_hz:.6f}",
+            f"current_limit = {self.current_limit:.6f}",
+            f"velocity_limit = {self.velocity_limit:.6f}",
+            f"encoder_offset = {self.encoder_offset}",
+            f"calib_pole_pairs = {self.calib_pole_pairs}",
+            f"calib_dir = {self.calib_dir}",
+            f"calib_electrical_offset_rad = {self.calib_electrical_offset_rad:.6f}",
+            f"calib_harmonic_amp_1 = {self.calib_harmonic_amp_1:.6f}",
+            f"calib_harmonic_phase_1 = {self.calib_harmonic_phase_1:.6f}",
+            f"calib_harmonic_amp_2 = {self.calib_harmonic_amp_2:.6f}",
+            f"calib_harmonic_phase_2 = {self.calib_harmonic_phase_2:.6f}",
+        ]
+
+
+@dataclass
+class ParamSnapshotReply:
+    motor_id: int
+    snapshot_version: int
+    snapshot: ParamSnapshot
+    seq: int
+    crc8: int
+    head: int = PARAM_SNAPSHOT_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "ParamSnapshotReply":
+        values = unpack_frame(
+            PARAM_SNAPSHOT_REPLY_FRAME_FORMAT,
+            data,
+            PARAM_SNAPSHOT_REPLY_HEAD,
+            "ParamSnapshotReply",
+        )
+        (
+            _,
+            motor_id,
+            snapshot_version,
+            motor_pole_pairs,
+            motor_phase_resistance,
+            motor_phase_inductance,
+            cur_kp,
+            cur_ki,
+            speed_kp,
+            speed_ki,
+            speed_out_max,
+            speed_out_min,
+            speed_lpf_time_constant_ms,
+            ff_velocity_gain,
+            ff_acceleration_gain,
+            ff_friction_compensation,
+            ff_enable,
+            speed_sample_freq_hz,
+            current_limit,
+            velocity_limit,
+            encoder_offset,
+            calib_pole_pairs,
+            calib_dir,
+            calib_electrical_offset_rad,
+            calib_harmonic_amp_1,
+            calib_harmonic_phase_1,
+            calib_harmonic_amp_2,
+            calib_harmonic_phase_2,
+            seq,
+            crc8,
+        ) = values
+        snapshot = ParamSnapshot(
+            motor_pole_pairs=int(motor_pole_pairs),
+            motor_phase_resistance=float(motor_phase_resistance),
+            motor_phase_inductance=float(motor_phase_inductance),
+            cur_kp=float(cur_kp),
+            cur_ki=float(cur_ki),
+            speed_kp=float(speed_kp),
+            speed_ki=float(speed_ki),
+            speed_out_max=float(speed_out_max),
+            speed_out_min=float(speed_out_min),
+            speed_lpf_time_constant_ms=float(speed_lpf_time_constant_ms),
+            ff_velocity_gain=float(ff_velocity_gain),
+            ff_acceleration_gain=float(ff_acceleration_gain),
+            ff_friction_compensation=float(ff_friction_compensation),
+            ff_enable=int(ff_enable),
+            speed_sample_freq_hz=float(speed_sample_freq_hz),
+            current_limit=float(current_limit),
+            velocity_limit=float(velocity_limit),
+            encoder_offset=int(encoder_offset),
+            calib_pole_pairs=int(calib_pole_pairs),
+            calib_dir=int(calib_dir),
+            calib_electrical_offset_rad=float(calib_electrical_offset_rad),
+            calib_harmonic_amp_1=float(calib_harmonic_amp_1),
+            calib_harmonic_phase_1=float(calib_harmonic_phase_1),
+            calib_harmonic_amp_2=float(calib_harmonic_amp_2),
+            calib_harmonic_phase_2=float(calib_harmonic_phase_2),
+        )
+        return cls(
+            motor_id=int(motor_id),
+            snapshot_version=int(snapshot_version),
+            snapshot=snapshot,
+            seq=int(seq),
+            crc8=int(crc8),
+        )
+
+    def to_summary(self) -> str:
+        return (
+            f"SNAPSHOT ID={self.motor_id} seq={self.seq} "
+            f"version={self.snapshot_version} pole_pairs={self.snapshot.motor_pole_pairs} "
+            f"vel_limit={self.snapshot.velocity_limit:.3f}"
+        )
+
+
+@dataclass
+class CalibStatusReply:
+    motor_id: int
+    calib_state: int
+    progress: int
+    seq: int
+    crc8: int
+    head: int = CALIB_STATUS_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "CalibStatusReply":
+        values = unpack_frame(
+            CALIB_STATUS_REPLY_FRAME_FORMAT,
+            data,
+            CALIB_STATUS_REPLY_HEAD,
+            "CalibStatusReply",
+        )
+        _, motor_id, calib_state, progress, seq, crc8 = values
+        return cls(
+            motor_id=int(motor_id),
+            calib_state=int(calib_state),
+            progress=int(progress),
+            seq=int(seq),
+            crc8=int(crc8),
+        )
+
+    def to_summary(self, calib_labels: Dict[int, str]) -> str:
+        state_name = calib_labels.get(self.calib_state, f"状态 {self.calib_state}")
+        return (
+            f"CALIB ID={self.motor_id} seq={self.seq} "
+            f"state={state_name} progress={self.progress}%"
+        )
+
+
+ParsedReply = Union[AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply]
 
 
 @dataclass
@@ -215,12 +649,16 @@ class PendingRequest:
 
 @dataclass
 class TelemetryState:
-    frame_count: int = 0
+    reply_count: int = 0
+    state_count: int = 0
     error_count: int = 0
-    lost_frames: int = 0
-    last_seq: Optional[int] = None
-    last_frame: Optional[ReplyFrame] = None
-    last_ack: str = "等待首个回显"
+    timeout_count: int = 0
+    last_state: Optional[StateReply] = None
+    last_ack_text: str = "等待命令结果"
+    last_param_value: Optional[ParamValueReply] = None
+    last_snapshot: Optional[ParamSnapshotReply] = None
+    last_calib: Optional[CalibStatusReply] = None
+    last_raw_hex: str = "-"
     histories: Dict[str, Deque[float]] = field(
         default_factory=lambda: {
             "velocity": deque(maxlen=DEFAULT_HISTORY_LENGTH),
@@ -235,18 +673,80 @@ class TelemetryState:
 class AppConfig:
     control_modes: List[ChoiceOption] = field(
         default_factory=lambda: [
-            ChoiceOption(0, "停止/休眠", "ctrl=0"),
-            ChoiceOption(1, "速度环", "ctrl=1"),
+            ChoiceOption(CTRL_MODE_STOP, "停止/休眠", "ctrl=0"),
+            ChoiceOption(CTRL_MODE_SPEED, "速度模式", "ctrl=1"),
+        ]
+    )
+    query_defs: List[ChoiceOption] = field(
+        default_factory=lambda: [
+            ChoiceOption(QUERY_GET_STATE, "读取状态"),
+            ChoiceOption(QUERY_GET_PARAM, "读取参数"),
+            ChoiceOption(QUERY_GET_PARAM_SNAPSHOT, "读取参数快照"),
+            ChoiceOption(QUERY_GET_CALIB_STATUS, "读取校准状态"),
+        ]
+    )
+    calib_defs: List[ChoiceOption] = field(
+        default_factory=lambda: [
+            ChoiceOption(CALIB_CMD_START_AUTO, "开始自动校准"),
         ]
     )
     param_defs: List[ChoiceOption] = field(
         default_factory=lambda: [
-            ChoiceOption(0x01, "速度环 Kp", "PARAM_CMD_ID_VEL_KP"),
-            ChoiceOption(0x02, "速度环 Ki", "PARAM_CMD_ID_VEL_KI"),
-            ChoiceOption(0x03, "速度限制", "PARAM_CMD_ID_VEL_LIMIT"),
-            ChoiceOption(0x04, "电流限制", "PARAM_CMD_ID_CUR_LIMIT"),
-            ChoiceOption(0x05, "前馈增益", "PARAM_CMD_ID_FF_GAIN"),
-            ChoiceOption(0x06, "前馈使能", "PARAM_CMD_ID_FF_ENABLE"),
+            ChoiceOption(0x01, "速度环 Kp"),
+            ChoiceOption(0x02, "速度环 Ki"),
+            ChoiceOption(0x03, "速度限制"),
+            ChoiceOption(0x04, "电流限制"),
+            ChoiceOption(0x05, "速度前馈增益"),
+            ChoiceOption(0x06, "前馈使能"),
+            ChoiceOption(0x10, "电机极对数"),
+            ChoiceOption(0x11, "相电阻"),
+            ChoiceOption(0x12, "相电感"),
+            ChoiceOption(0x13, "电流环 Kp"),
+            ChoiceOption(0x14, "电流环 Ki"),
+            ChoiceOption(0x15, "速度输出上限"),
+            ChoiceOption(0x16, "速度输出下限"),
+            ChoiceOption(0x17, "速度滤波常数"),
+            ChoiceOption(0x18, "加速度前馈"),
+            ChoiceOption(0x19, "摩擦补偿"),
+            ChoiceOption(0x1A, "速度环采样频率"),
+            ChoiceOption(0x20, "编码器偏移"),
+            ChoiceOption(0x30, "校准极对数"),
+            ChoiceOption(0x31, "校准方向"),
+            ChoiceOption(0x32, "电角零位偏移"),
+            ChoiceOption(0x33, "一次谐波幅值"),
+            ChoiceOption(0x34, "一次谐波相位"),
+            ChoiceOption(0x35, "二次谐波幅值"),
+            ChoiceOption(0x36, "二次谐波相位"),
+        ]
+    )
+    result_defs: List[ChoiceOption] = field(
+        default_factory=lambda: [
+            ChoiceOption(RESULT_OK, "成功"),
+            ChoiceOption(RESULT_BUSY, "忙碌"),
+            ChoiceOption(RESULT_UNSUPPORTED, "不支持"),
+            ChoiceOption(RESULT_INVALID_PARAM, "参数非法"),
+            ChoiceOption(RESULT_INVALID_VALUE, "参数越界"),
+            ChoiceOption(RESULT_EEPROM_ERROR, "EEPROM 错误"),
+            ChoiceOption(RESULT_CALIB_FAILED, "校准失败"),
+            ChoiceOption(RESULT_INTERNAL_ERROR, "内部错误"),
+        ]
+    )
+    calib_state_defs: List[ChoiceOption] = field(
+        default_factory=lambda: [
+            ChoiceOption(CALIB_STATE_IDLE, "空闲"),
+            ChoiceOption(CALIB_STATE_RUNNING, "运行中"),
+            ChoiceOption(CALIB_STATE_SUCCESS, "成功"),
+            ChoiceOption(CALIB_STATE_FAIL_ENCODER, "编码器失败"),
+            ChoiceOption(CALIB_STATE_FAIL_BUSY, "忙碌失败"),
+            ChoiceOption(CALIB_STATE_FAIL_INTERNAL, "内部失败"),
+        ]
+    )
+    ack_cmd_defs: List[ChoiceOption] = field(
+        default_factory=lambda: [
+            ChoiceOption(REQUEST_KIND_CTRL, "控制命令"),
+            ChoiceOption(REQUEST_KIND_PARAM_WRITE, "参数写入"),
+            ChoiceOption(REQUEST_KIND_QUERY, "查询命令"),
+            ChoiceOption(REQUEST_KIND_CALIB, "校准命令"),
         ]
     )
 
@@ -257,6 +757,26 @@ class AppConfig:
     @property
     def param_labels(self) -> Dict[int, str]:
         return {item.value: item.label for item in self.param_defs}
+
+    @property
+    def result_labels(self) -> Dict[int, str]:
+        return {item.value: item.label for item in self.result_defs}
+
+    @property
+    def calib_state_labels(self) -> Dict[int, str]:
+        return {item.value: item.label for item in self.calib_state_defs}
+
+    @property
+    def ack_cmd_labels(self) -> Dict[int, str]:
+        return {item.value: item.label for item in self.ack_cmd_defs}
+
+    @property
+    def query_labels(self) -> Dict[int, str]:
+        return {item.value: item.label for item in self.query_defs}
+
+    @property
+    def calib_cmd_labels(self) -> Dict[int, str]:
+        return {item.value: item.label for item in self.calib_defs}
 
 
 class SerialWorker:
@@ -335,9 +855,11 @@ class SerialWorker:
                 payload, summary, expected_seq = self._tx_queue.get_nowait()
             except Empty:
                 break
+
             if self._serial is None:
                 self.on_event("error", "串口未连接，发送失败")
                 continue
+
             try:
                 self._serial.write(payload)
                 self._serial.flush()
@@ -347,6 +869,7 @@ class SerialWorker:
             except serial.SerialException as exc:
                 self.on_event("error", f"串口发送失败: {exc}")
                 continue
+
             self.on_event(
                 "tx",
                 {
@@ -356,36 +879,80 @@ class SerialWorker:
                 },
             )
 
+    def _find_reply_header(self) -> int:
+        for index in range(len(self._buffer) - 1):
+            head = (int(self._buffer[index]) << 8) | int(self._buffer[index + 1])
+            if head in REPLY_FRAME_SPECS:
+                return index
+        return -1
+
+    def _keep_possible_header_prefix(self) -> int:
+        if self._buffer and int(self._buffer[-1]) in (0x06, 0x07, 0x08, 0x09, 0x0A):
+            last_byte = self._buffer[-1]
+            self._buffer.clear()
+            self._buffer.append(last_byte)
+            return 1
+        self._buffer.clear()
+        return 0
+
+    def _decode_reply(self, frame_bytes: bytes) -> ParsedReply:
+        if len(frame_bytes) < 2:
+            raise ValueError("回复帧长度不足")
+
+        head = (frame_bytes[0] << 8) | frame_bytes[1]
+        if head == ACK_REPLY_HEAD:
+            return AckReply.from_bytes(frame_bytes)
+        if head == STATE_REPLY_HEAD:
+            return StateReply.from_bytes(frame_bytes)
+        if head == PARAM_VALUE_REPLY_HEAD:
+            return ParamValueReply.from_bytes(frame_bytes)
+        if head == PARAM_SNAPSHOT_REPLY_HEAD:
+            return ParamSnapshotReply.from_bytes(frame_bytes)
+        if head == CALIB_STATUS_REPLY_HEAD:
+            return CalibStatusReply.from_bytes(frame_bytes)
+        raise ValueError(f"未知回复帧头: 0x{head:04X}")
+
     def _process_rx_buffer(self) -> None:
-        while len(self._buffer) >= REPLY_FRAME_SIZE:
+        while True:
+            if len(self._buffer) < 2:
+                break
+
             header_pos = self._find_reply_header()
             if header_pos < 0:
                 dropped = len(self._buffer)
-                self._buffer.clear()
-                self.on_event("parse_error", f"未找到上行帧头，丢弃 {dropped} 字节")
+                kept = self._keep_possible_header_prefix()
+                if dropped > kept:
+                    self.on_event("parse_error", f"未找到上行帧头，丢弃 {dropped - kept} 字节")
                 break
+
             if header_pos > 0:
                 del self._buffer[:header_pos]
                 self.on_event("parse_error", f"跳过 {header_pos} 字节噪声数据")
-            if len(self._buffer) < REPLY_FRAME_SIZE:
+
+            if len(self._buffer) < 2:
                 break
 
-            frame_bytes = bytes(self._buffer[:REPLY_FRAME_SIZE])
+            head = (int(self._buffer[0]) << 8) | int(self._buffer[1])
+            spec = REPLY_FRAME_SPECS.get(head)
+            if spec is None:
+                del self._buffer[0]
+                self.on_event("parse_error", f"未知回复帧头: 0x{head:04X}")
+                continue
+
+            frame_size, _ = spec
+            if len(self._buffer) < frame_size:
+                break
+
+            frame_bytes = bytes(self._buffer[:frame_size])
             try:
-                frame = ReplyFrame.from_bytes(frame_bytes)
+                reply = self._decode_reply(frame_bytes)
             except ValueError as exc:
                 del self._buffer[0]
                 self.on_event("parse_error", str(exc))
                 continue
 
-            del self._buffer[:REPLY_FRAME_SIZE]
-            self.on_event("rx", {"frame": frame, "payload": frame_bytes})
-
-    def _find_reply_header(self) -> int:
-        for index in range(len(self._buffer) - 1):
-            if self._buffer[index] == 0x07 and self._buffer[index + 1] == 0x21:
-                return index
-        return -1
+            del self._buffer[:frame_size]
+            self.on_event("rx", {"reply": reply, "payload": frame_bytes})
 
 
 class FOCGuiApp:
@@ -395,18 +962,24 @@ class FOCGuiApp:
         self.initial_port = initial_port
         self.initial_baudrate = initial_baudrate
         self.worker: Optional[SerialWorker] = None
-        self.events: "Queue[tuple[str, object]]" = Queue()
+        self.events: "Queue[Tuple[str, object]]" = Queue()
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
         self.pending_requests: Dict[int, PendingRequest] = {}
         self.sequence_counter = 0
         self.plot_dirty = False
         self.font_status = "未加载中文字体"
+        self.next_state_poll_at = 0.0
+        self.next_calib_poll_at = 0.0
 
         self.tags = {
             "port_combo": "port_combo",
             "baud_input": "baud_input",
             "connect_button": "connect_button",
             "status_text": "status_text",
+            "poll_enabled": "poll_enabled",
+            "poll_hz": "poll_hz",
+            "calib_poll_enabled": "calib_poll_enabled",
+            "calib_poll_hz": "calib_poll_hz",
             "motor_id": "motor_id",
             "auto_seq": "auto_seq",
             "seq_input": "seq_input",
@@ -414,21 +987,27 @@ class FOCGuiApp:
             "control_target": "control_target",
             "control_ff0": "control_ff0",
             "control_ff1": "control_ff1",
-            "param_choice": "param_choice",
-            "param_value": "param_value",
+            "query_param_choice": "query_param_choice",
+            "write_param_choice": "write_param_choice",
+            "write_param_value": "write_param_value",
             "raw_hex": "raw_hex",
-            "frame_count": "frame_count",
+            "reply_count": "reply_count",
+            "state_count": "state_count",
             "error_count": "error_count",
-            "lost_frames": "lost_frames",
+            "timeout_count": "timeout_count",
             "last_ack": "last_ack",
             "value_motor_id": "value_motor_id",
-            "value_seq": "value_seq",
-            "value_status": "value_status",
+            "value_mode": "value_mode",
+            "value_target": "value_target",
             "value_velocity": "value_velocity",
             "value_output": "value_output",
             "value_position": "value_position",
             "value_voltage": "value_voltage",
+            "value_status": "value_status",
             "value_hex": "value_hex",
+            "last_param": "last_param",
+            "last_calib": "last_calib",
+            "snapshot_text": "snapshot_text",
             "log_text": "log_text",
             "velocity_series": "velocity_series",
             "output_series": "output_series",
@@ -447,12 +1026,21 @@ class FOCGuiApp:
         dpg.set_primary_window("main_window", True)
         self.refresh_ports(select_port=self.initial_port)
         dpg.set_value(self.tags["baud_input"], int(self.initial_baudrate))
-        dpg.create_viewport(title="FOC Controller Host", width=1480, height=920, min_width=1200, min_height=760)
+        self._append_log("SYS", self.font_status)
+        dpg.create_viewport(
+            title="FOC Controller Host",
+            width=1560,
+            height=960,
+            min_width=1260,
+            min_height=820,
+        )
         dpg.setup_dearpygui()
         dpg.show_viewport()
 
         while dpg.is_dearpygui_running():
             self._process_events()
+            self._check_timeouts()
+            self._run_pollers()
             if self.plot_dirty:
                 self._update_plots()
                 self.plot_dirty = False
@@ -512,13 +1100,15 @@ class FOCGuiApp:
             no_close=True,
         ):
             with dpg.group(horizontal=True):
-                with dpg.child_window(width=430, autosize_y=True, border=False):
+                with dpg.child_window(width=500, autosize_y=True, border=False):
                     self._build_connection_panel()
                     dpg.add_spacer(height=6)
                     self._build_command_panel()
                     dpg.add_spacer(height=6)
-                    self._build_last_frame_panel()
+                    self._build_live_panel()
                 with dpg.child_window(width=-1, autosize_y=True, border=False):
+                    self._build_snapshot_panel()
+                    dpg.add_spacer(height=6)
                     self._build_plot_panel()
                     dpg.add_spacer(height=6)
                     self._build_log_panel()
@@ -527,7 +1117,7 @@ class FOCGuiApp:
         with dpg.collapsing_header(label="串口连接", default_open=True):
             dpg.add_text("RS485 会话")
             with dpg.group(horizontal=True):
-                dpg.add_combo(items=[], width=180, tag=self.tags["port_combo"], no_arrow_button=False)
+                dpg.add_combo(items=[], width=200, tag=self.tags["port_combo"], no_arrow_button=False)
                 dpg.add_button(label="刷新串口", callback=lambda: self.refresh_ports())
             dpg.add_input_int(
                 label="波特率",
@@ -536,74 +1126,171 @@ class FOCGuiApp:
                 step=100000,
                 min_value=9600,
                 min_clamped=True,
-                width=180,
+                width=200,
             )
             with dpg.group(horizontal=True):
                 dpg.add_button(label="连接", tag=self.tags["connect_button"], callback=lambda: self.connect())
                 dpg.add_button(label="断开", callback=lambda: self.disconnect())
             dpg.add_text("未连接", tag=self.tags["status_text"])
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(label="自动状态轮询", tag=self.tags["poll_enabled"], default_value=True)
+                dpg.add_input_float(
+                    label="Hz",
+                    tag=self.tags["poll_hz"],
+                    default_value=DEFAULT_POLL_HZ,
+                    width=120,
+                    format="%.2f",
+                )
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(label="自动校准查询", tag=self.tags["calib_poll_enabled"], default_value=False)
+                dpg.add_input_float(
+                    label="Hz ",
+                    tag=self.tags["calib_poll_hz"],
+                    default_value=DEFAULT_CALIB_POLL_HZ,
+                    width=120,
+                    format="%.2f",
+                )
 
     def _build_command_panel(self) -> None:
         with dpg.collapsing_header(label="命令面板", default_open=True):
-            dpg.add_input_int(label="电机 ID", tag=self.tags["motor_id"], default_value=1, min_value=0, max_value=255, min_clamped=True, max_clamped=True, width=180)
+            dpg.add_input_int(
+                label="电机 ID",
+                tag=self.tags["motor_id"],
+                default_value=1,
+                min_value=0,
+                max_value=255,
+                min_clamped=True,
+                max_clamped=True,
+                width=200,
+            )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(label="自动序列号", tag=self.tags["auto_seq"], default_value=True)
-                dpg.add_input_int(label="SEQ", tag=self.tags["seq_input"], default_value=0, min_value=0, max_value=255, min_clamped=True, max_clamped=True, width=120)
+                dpg.add_input_int(
+                    label="SEQ",
+                    tag=self.tags["seq_input"],
+                    default_value=0,
+                    min_value=0,
+                    max_value=255,
+                    min_clamped=True,
+                    max_clamped=True,
+                    width=120,
+                )
 
             with dpg.tab_bar():
-                with dpg.tab(label="控制命令"):
+                with dpg.tab(label="控制"):
                     dpg.add_combo(
                         items=[item.label for item in self.config.control_modes],
                         default_value=self.config.control_modes[0].label,
                         label="控制模式",
                         tag=self.tags["control_mode"],
-                        width=220,
+                        width=240,
                     )
-                    dpg.add_input_float(label="目标值", tag=self.tags["control_target"], default_value=0.0, width=220, format="%.6f")
-                    dpg.add_input_float(label="前馈 0", tag=self.tags["control_ff0"], default_value=0.0, width=220, format="%.6f")
-                    dpg.add_input_float(label="前馈 1", tag=self.tags["control_ff1"], default_value=0.0, width=220, format="%.6f")
-                    dpg.add_button(label="发送控制命令", callback=lambda: self.send_control_command())
+                    dpg.add_input_float(
+                        label="目标值",
+                        tag=self.tags["control_target"],
+                        default_value=0.0,
+                        width=240,
+                        format="%.6f",
+                    )
+                    dpg.add_input_float(
+                        label="前馈 0",
+                        tag=self.tags["control_ff0"],
+                        default_value=0.0,
+                        width=240,
+                        format="%.6f",
+                    )
+                    dpg.add_input_float(
+                        label="前馈 1",
+                        tag=self.tags["control_ff1"],
+                        default_value=0.0,
+                        width=240,
+                        format="%.6f",
+                    )
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="发送控制命令", callback=lambda: self.send_control_command())
+                        dpg.add_button(label="发送停止命令", callback=lambda: self.send_stop_command())
 
-                with dpg.tab(label="参数命令"):
+                with dpg.tab(label="查询"):
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="读取状态", callback=lambda: self.send_state_query())
+                        dpg.add_button(label="读取快照", callback=lambda: self.send_snapshot_query())
+                        dpg.add_button(label="读取校准状态", callback=lambda: self.send_calibration_query())
+                    dpg.add_combo(
+                        items=[item.label for item in self.config.param_defs],
+                        default_value=self.config.param_defs[0].label,
+                        label="读取参数",
+                        tag=self.tags["query_param_choice"],
+                        width=240,
+                    )
+                    dpg.add_button(label="读取选中参数", callback=lambda: self.send_param_query())
+
+                with dpg.tab(label="参数写入"):
                     dpg.add_combo(
                         items=[item.label for item in self.config.param_defs],
                         default_value=self.config.param_defs[0].label,
                         label="参数项",
-                        tag=self.tags["param_choice"],
-                        width=220,
+                        tag=self.tags["write_param_choice"],
+                        width=240,
                     )
-                    dpg.add_input_float(label="参数值", tag=self.tags["param_value"], default_value=0.0, width=220, format="%.6f")
-                    dpg.add_button(label="发送参数命令", callback=lambda: self.send_param_command())
+                    dpg.add_input_float(
+                        label="参数值",
+                        tag=self.tags["write_param_value"],
+                        default_value=0.0,
+                        width=240,
+                        format="%.6f",
+                    )
+                    dpg.add_button(label="写入参数", callback=lambda: self.send_param_write())
+
+                with dpg.tab(label="校准"):
+                    dpg.add_text("收到 ACK 后固件会后台执行校准，进度请看校准状态回复。", wrap=420)
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="开始自动校准", callback=lambda: self.send_calibration_start())
+                        dpg.add_button(label="刷新校准状态", callback=lambda: self.send_calibration_query())
 
                 with dpg.tab(label="原始帧"):
-                    dpg.add_text("用于协议联调或临时验证未建模的下行帧")
+                    dpg.add_text("用于协议联调或临时验证未建模的下行帧。")
                     dpg.add_input_text(
                         label="HEX",
                         tag=self.tags["raw_hex"],
                         multiline=True,
                         width=-1,
                         height=140,
-                        hint="例如: 11 45 01 01 00 00 20 41 00 00 00 00 00 00 00 00 23 5A",
+                        hint="例如: 13 45 01 01 00 01 12",
                     )
                     dpg.add_button(label="发送原始帧", callback=lambda: self.send_raw_command())
 
-    def _build_last_frame_panel(self) -> None:
-        with dpg.collapsing_header(label="最新回显", default_open=True):
+    def _build_live_panel(self) -> None:
+        with dpg.collapsing_header(label="最近状态", default_open=True):
             with dpg.table(header_row=False, resizable=False, policy=dpg.mvTable_SizingStretchProp):
                 dpg.add_table_column()
                 dpg.add_table_column()
-                self._add_kv_row("帧计数", self.tags["frame_count"], "0")
-                self._add_kv_row("错误计数", self.tags["error_count"], "0")
-                self._add_kv_row("丢帧数", self.tags["lost_frames"], "0")
-                self._add_kv_row("最近匹配", self.tags["last_ack"], "等待首个回显")
+                self._add_kv_row("回复计数", self.tags["reply_count"], "0")
+                self._add_kv_row("状态回复", self.tags["state_count"], "0")
+                self._add_kv_row("解析错误", self.tags["error_count"], "0")
+                self._add_kv_row("请求超时", self.tags["timeout_count"], "0")
+                self._add_kv_row("最近匹配", self.tags["last_ack"], "等待命令结果")
                 self._add_kv_row("电机 ID", self.tags["value_motor_id"], "-")
-                self._add_kv_row("序列号", self.tags["value_seq"], "-")
-                self._add_kv_row("状态", self.tags["value_status"], "-")
+                self._add_kv_row("控制模式", self.tags["value_mode"], "-")
+                self._add_kv_row("目标值", self.tags["value_target"], "-")
                 self._add_kv_row("速度", self.tags["value_velocity"], "-")
                 self._add_kv_row("输出", self.tags["value_output"], "-")
                 self._add_kv_row("位置", self.tags["value_position"], "-")
                 self._add_kv_row("电压", self.tags["value_voltage"], "-")
+                self._add_kv_row("健康状态", self.tags["value_status"], "-")
+                self._add_kv_row("最近参数", self.tags["last_param"], "-")
+                self._add_kv_row("校准状态", self.tags["last_calib"], "-")
                 self._add_kv_row("最近帧 HEX", self.tags["value_hex"], "-")
+
+    def _build_snapshot_panel(self) -> None:
+        with dpg.collapsing_header(label="参数快照", default_open=True):
+            dpg.add_input_text(
+                tag=self.tags["snapshot_text"],
+                multiline=True,
+                readonly=True,
+                width=-1,
+                height=260,
+                default_value="等待参数快照...",
+            )
 
     def _build_plot_panel(self) -> None:
         with dpg.collapsing_header(label="实时曲线", default_open=True):
@@ -614,13 +1301,19 @@ class FOCGuiApp:
 
     def _build_log_panel(self) -> None:
         with dpg.collapsing_header(label="通信日志", default_open=True):
-            dpg.add_input_text(tag=self.tags["log_text"], multiline=True, readonly=True, width=-1, height=280)
+            dpg.add_input_text(
+                tag=self.tags["log_text"],
+                multiline=True,
+                readonly=True,
+                width=-1,
+                height=300,
+            )
             dpg.add_button(label="清空日志", callback=lambda: self.clear_logs())
 
     def _add_kv_row(self, key: str, value_tag: str, default_value: str) -> None:
         with dpg.table_row():
             dpg.add_text(key)
-            dpg.add_text(default_value, tag=value_tag, wrap=280)
+            dpg.add_text(default_value, tag=value_tag, wrap=320)
 
     def _create_plot(self, title: str, y_label: str, series_tag: str, y_axis_tag: str) -> None:
         with dpg.plot(label=title, height=170, width=-1):
@@ -634,9 +1327,13 @@ class FOCGuiApp:
     def refresh_ports(self, select_port: str = "") -> None:
         ports = [port.device for port in serial.tools.list_ports.comports()]
         dpg.configure_item(self.tags["port_combo"], items=ports)
-        chosen = select_port or (ports[0] if ports else "")
+
+        current_value = str(dpg.get_value(self.tags["port_combo"]) or "")
+        chosen = select_port or current_value
+        if chosen not in ports:
+            chosen = ports[0] if ports else ""
         dpg.set_value(self.tags["port_combo"], chosen)
-        self._append_log("SYS", self.font_status)
+
         if ports:
             self._append_log("SYS", f"刷新串口列表: {', '.join(ports)}")
         else:
@@ -646,11 +1343,16 @@ class FOCGuiApp:
         if self.worker is not None:
             self._append_log("SYS", "已有连接实例在运行")
             return
-        port = dpg.get_value(self.tags["port_combo"]) or self.initial_port
+
+        port = str(dpg.get_value(self.tags["port_combo"]) or self.initial_port)
         baudrate = int(dpg.get_value(self.tags["baud_input"]))
         if not port:
             self._append_log("ERR", "请选择串口后再连接")
             return
+
+        self.pending_requests.clear()
+        self.next_state_poll_at = time.monotonic()
+        self.next_calib_poll_at = time.monotonic()
         self.worker = SerialWorker(port=port, baudrate=baudrate, on_event=self.post_event)
         dpg.set_value(self.tags["status_text"], f"连接中: {port} @ {baudrate}")
         self.worker.start()
@@ -658,59 +1360,24 @@ class FOCGuiApp:
     def disconnect(self) -> None:
         if self.worker is None:
             return
+
         worker = self.worker
         self.worker = None
+        self.pending_requests.clear()
         worker.stop()
 
     def clear_logs(self) -> None:
         self.log_lines.clear()
         dpg.set_value(self.tags["log_text"], "")
 
-    def send_control_command(self) -> None:
-        mode_label = dpg.get_value(self.tags["control_mode"])
-        mode = next((item for item in self.config.control_modes if item.label == mode_label), None)
-        if mode is None:
-            self._append_log("ERR", f"未知控制模式: {mode_label}")
-            return
-        seq = self._next_seq()
-        frame = CtrlCmdFrame(
-            motor_id=int(dpg.get_value(self.tags["motor_id"])),
-            ctrl_mode=mode.value,
-            target=float(dpg.get_value(self.tags["control_target"])),
-            ff0=float(dpg.get_value(self.tags["control_ff0"])),
-            ff1=float(dpg.get_value(self.tags["control_ff1"])),
-            seq=seq,
-        )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.control_mode_labels), expected_seq=seq)
+    def _find_choice_by_label(self, options: List[ChoiceOption], label: str) -> Optional[ChoiceOption]:
+        for item in options:
+            if item.label == label:
+                return item
+        return None
 
-    def send_param_command(self) -> None:
-        param_label = dpg.get_value(self.tags["param_choice"])
-        param = next((item for item in self.config.param_defs if item.label == param_label), None)
-        if param is None:
-            self._append_log("ERR", f"未知参数项: {param_label}")
-            return
-        seq = self._next_seq()
-        frame = ParamCmdFrame(
-            motor_id=int(dpg.get_value(self.tags["motor_id"])),
-            param_id=param.value,
-            value=float(dpg.get_value(self.tags["param_value"])),
-            seq=seq,
-        )
-        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.param_labels), expected_seq=seq)
-
-    def send_raw_command(self) -> None:
-        try:
-            payload = parse_hex_string(str(dpg.get_value(self.tags["raw_hex"])))
-        except ValueError as exc:
-            self._append_log("ERR", str(exc))
-            return
-        self._queue_frame(payload, "原始帧发送", expected_seq=None)
-
-    def _queue_frame(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
-        if self.worker is None:
-            self._append_log("ERR", "串口未连接，无法发送")
-            return
-        self.worker.send(payload, summary, expected_seq)
+    def _selected_motor_id(self) -> int:
+        return int(dpg.get_value(self.tags["motor_id"])) & 0xFF
 
     def _next_seq(self) -> int:
         if dpg.get_value(self.tags["auto_seq"]):
@@ -719,6 +1386,107 @@ class FOCGuiApp:
             dpg.set_value(self.tags["seq_input"], seq)
             return seq
         return int(dpg.get_value(self.tags["seq_input"])) & 0xFF
+
+    def _queue_frame(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
+        if self.worker is None:
+            self._append_log("ERR", "串口未连接，无法发送")
+            return
+        self.worker.send(payload, summary, expected_seq)
+
+    def send_control_command(self) -> None:
+        mode_label = str(dpg.get_value(self.tags["control_mode"]))
+        mode = self._find_choice_by_label(self.config.control_modes, mode_label)
+        if mode is None:
+            self._append_log("ERR", f"未知控制模式: {mode_label}")
+            return
+
+        seq = self._next_seq()
+        frame = CtrlCmdFrame(
+            motor_id=self._selected_motor_id(),
+            ctrl_mode=mode.value,
+            target=float(dpg.get_value(self.tags["control_target"])),
+            ff0=float(dpg.get_value(self.tags["control_ff0"])),
+            ff1=float(dpg.get_value(self.tags["control_ff1"])),
+            seq=seq,
+        )
+        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.control_mode_labels), expected_seq=seq)
+
+    def send_stop_command(self) -> None:
+        seq = self._next_seq()
+        frame = CtrlCmdFrame(
+            motor_id=self._selected_motor_id(),
+            ctrl_mode=CTRL_MODE_STOP,
+            target=0.0,
+            ff0=0.0,
+            ff1=0.0,
+            seq=seq,
+        )
+        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.control_mode_labels), expected_seq=seq)
+
+    def send_param_write(self) -> None:
+        param_label = str(dpg.get_value(self.tags["write_param_choice"]))
+        param = self._find_choice_by_label(self.config.param_defs, param_label)
+        if param is None:
+            self._append_log("ERR", f"未知参数项: {param_label}")
+            return
+
+        seq = self._next_seq()
+        frame = ParamWriteCmdFrame(
+            motor_id=self._selected_motor_id(),
+            param_id=param.value,
+            value=float(dpg.get_value(self.tags["write_param_value"])),
+            seq=seq,
+        )
+        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.param_labels), expected_seq=seq)
+
+    def _send_query(self, query_type: int, arg0: int, arg_label: str = "") -> None:
+        seq = self._next_seq()
+        frame = QueryCmdFrame(
+            motor_id=self._selected_motor_id(),
+            query_type=query_type,
+            arg0=arg0,
+            seq=seq,
+        )
+        self._queue_frame(
+            frame.to_bytes(),
+            frame.to_summary(self.config.query_labels, arg_label=arg_label),
+            expected_seq=seq,
+        )
+
+    def send_state_query(self) -> None:
+        self._send_query(QUERY_GET_STATE, 0)
+
+    def send_param_query(self) -> None:
+        param_label = str(dpg.get_value(self.tags["query_param_choice"]))
+        param = self._find_choice_by_label(self.config.param_defs, param_label)
+        if param is None:
+            self._append_log("ERR", f"未知参数项: {param_label}")
+            return
+        self._send_query(QUERY_GET_PARAM, param.value, arg_label=param.label)
+
+    def send_snapshot_query(self) -> None:
+        self._send_query(QUERY_GET_PARAM_SNAPSHOT, 0)
+
+    def send_calibration_query(self) -> None:
+        self._send_query(QUERY_GET_CALIB_STATUS, 0)
+
+    def send_calibration_start(self) -> None:
+        seq = self._next_seq()
+        frame = CalibCmdFrame(
+            motor_id=self._selected_motor_id(),
+            calib_cmd=CALIB_CMD_START_AUTO,
+            arg0=0,
+            seq=seq,
+        )
+        self._queue_frame(frame.to_bytes(), frame.to_summary(self.config.calib_cmd_labels), expected_seq=seq)
+
+    def send_raw_command(self) -> None:
+        try:
+            payload = parse_hex_string(str(dpg.get_value(self.tags["raw_hex"])))
+        except ValueError as exc:
+            self._append_log("ERR", str(exc))
+            return
+        self._queue_frame(payload, "原始帧发送", expected_seq=None)
 
     def _process_events(self) -> None:
         while True:
@@ -740,79 +1508,178 @@ class FOCGuiApp:
             elif event_type == "error":
                 self._append_log("ERR", str(payload))
 
+    def _run_pollers(self) -> None:
+        if self.worker is None:
+            return
+
+        now = time.monotonic()
+
+        if dpg.get_value(self.tags["poll_enabled"]):
+            state_hz = max(0.2, float(dpg.get_value(self.tags["poll_hz"])))
+            if now >= self.next_state_poll_at:
+                self.send_state_query()
+                self.next_state_poll_at = now + (1.0 / state_hz)
+
+        calib_running = (
+            self.state.last_calib is not None and self.state.last_calib.calib_state == CALIB_STATE_RUNNING
+        )
+        if dpg.get_value(self.tags["calib_poll_enabled"]) or calib_running:
+            calib_hz = max(0.2, float(dpg.get_value(self.tags["calib_poll_hz"])))
+            if now >= self.next_calib_poll_at:
+                self.send_calibration_query()
+                self.next_calib_poll_at = now + (1.0 / calib_hz)
+
+    def _check_timeouts(self) -> None:
+        if not self.pending_requests:
+            return
+
+        now = time.monotonic()
+        expired: List[int] = []
+
+        for seq, pending in self.pending_requests.items():
+            if (now - pending.timestamp) >= REQUEST_TIMEOUT_SECONDS:
+                expired.append(seq)
+
+        for seq in expired:
+            pending = self.pending_requests.pop(seq, None)
+            if pending is None:
+                continue
+            self.state.timeout_count += 1
+            self.state.last_ack_text = f"seq={seq} 请求超时: {pending.summary}"
+            self._append_log("ERR", self.state.last_ack_text)
+
+        if expired:
+            self._refresh_stats_only()
+
     def _handle_connection_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
         connected = bool(info.get("connected"))
         message = str(info.get("message", ""))
+
         dpg.set_value(self.tags["status_text"], message or ("已连接" if connected else "未连接"))
         self._append_log("SYS", message or ("已连接" if connected else "已断开"))
-        if not connected and self.worker is not None:
+
+        if not connected:
             self.worker = None
+            self.pending_requests.clear()
 
     def _handle_tx_event(self, payload: object) -> None:
         if not isinstance(payload, dict):
             return
+
         summary = str(payload.get("summary", "发送数据"))
         raw = payload.get("payload", b"")
         expected_seq = payload.get("expected_seq")
+
         self._append_log("TX", f"{summary} | {format_hex(raw)}")
         if isinstance(expected_seq, int):
             self.pending_requests[expected_seq] = PendingRequest(
                 seq=expected_seq,
                 summary=summary,
-                timestamp=time.time(),
+                timestamp=time.monotonic(),
             )
+
+    def _reply_to_summary(self, reply: ParsedReply) -> str:
+        if isinstance(reply, AckReply):
+            return reply.to_summary(self.config.ack_cmd_labels, self.config.result_labels)
+        if isinstance(reply, StateReply):
+            return reply.to_summary(self.config.control_mode_labels)
+        if isinstance(reply, ParamValueReply):
+            return reply.to_summary(self.config.param_labels)
+        if isinstance(reply, ParamSnapshotReply):
+            return reply.to_summary()
+        if isinstance(reply, CalibStatusReply):
+            return reply.to_summary(self.config.calib_state_labels)
+        return "未知回复"
 
     def _handle_rx_event(self, payload: object) -> None:
         if not isinstance(payload, dict):
             return
-        frame = payload.get("frame")
+
+        reply = payload.get("reply")
         raw = payload.get("payload", b"")
-        if not isinstance(frame, ReplyFrame):
+        if not isinstance(reply, (AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply)):
             return
 
-        self.state.frame_count += 1
-        if self.state.last_seq is not None:
-            expected_seq = (self.state.last_seq + 1) & 0xFF
-            if frame.seq != expected_seq:
-                self.state.lost_frames += (frame.seq - expected_seq) & 0xFF
-        self.state.last_seq = frame.seq
-        self.state.last_frame = frame
-        self.state.histories["velocity"].append(frame.velocity)
-        self.state.histories["output"].append(frame.output)
-        self.state.histories["position"].append(frame.position)
-        self.state.histories["voltage"].append(frame.voltage)
-        self.plot_dirty = True
+        self.state.reply_count += 1
+        self.state.last_raw_hex = format_hex(raw)
+        summary = self._reply_to_summary(reply)
+        pending = self.pending_requests.pop(reply.seq, None)
 
-        pending = self.pending_requests.pop(frame.seq, None)
         if pending is not None:
-            latency_ms = (time.time() - pending.timestamp) * 1000.0
-            self.state.last_ack = f"seq={frame.seq} <- {pending.summary} ({latency_ms:.1f} ms)"
+            latency_ms = (time.monotonic() - pending.timestamp) * 1000.0
+            self.state.last_ack_text = f"seq={reply.seq} <- {pending.summary} ({latency_ms:.1f} ms)"
         else:
-            self.state.last_ack = f"seq={frame.seq} 未匹配到待确认请求"
+            self.state.last_ack_text = f"seq={reply.seq} 未匹配待确认请求"
 
-        self._append_log("RX", f"{frame.to_summary()} | {format_hex(raw)}")
-        self._refresh_live_frame(raw)
+        if isinstance(reply, AckReply):
+            self.state.last_ack_text = f"{self.state.last_ack_text} | {summary}"
+        elif isinstance(reply, StateReply):
+            self.state.state_count += 1
+            self.state.last_state = reply
+            self.state.histories["velocity"].append(reply.velocity)
+            self.state.histories["output"].append(reply.output)
+            self.state.histories["position"].append(reply.position)
+            self.state.histories["voltage"].append(reply.voltage)
+            self.plot_dirty = True
+        elif isinstance(reply, ParamValueReply):
+            self.state.last_param_value = reply
+        elif isinstance(reply, ParamSnapshotReply):
+            self.state.last_snapshot = reply
+        elif isinstance(reply, CalibStatusReply):
+            self.state.last_calib = reply
+
+        self._append_log("RX", f"{summary} | {format_hex(raw)}")
+        self._refresh_live_values()
 
     def _refresh_stats_only(self) -> None:
-        dpg.set_value(self.tags["frame_count"], str(self.state.frame_count))
+        dpg.set_value(self.tags["reply_count"], str(self.state.reply_count))
+        dpg.set_value(self.tags["state_count"], str(self.state.state_count))
         dpg.set_value(self.tags["error_count"], str(self.state.error_count))
-        dpg.set_value(self.tags["lost_frames"], str(self.state.lost_frames))
-        dpg.set_value(self.tags["last_ack"], self.state.last_ack)
+        dpg.set_value(self.tags["timeout_count"], str(self.state.timeout_count))
+        dpg.set_value(self.tags["last_ack"], self.state.last_ack_text)
 
-    def _refresh_live_frame(self, raw: bytes) -> None:
-        frame = self.state.last_frame
+    def _refresh_live_values(self) -> None:
+        state_reply = self.state.last_state
+        param_reply = self.state.last_param_value
+        calib_reply = self.state.last_calib
+        snapshot_reply = self.state.last_snapshot
+
         self._refresh_stats_only()
-        if frame is None:
-            return
-        dpg.set_value(self.tags["value_motor_id"], str(frame.motor_id))
-        dpg.set_value(self.tags["value_seq"], str(frame.seq))
-        dpg.set_value(self.tags["value_status"], f"{parse_status(frame.status)} (0x{frame.status:02X})")
-        dpg.set_value(self.tags["value_velocity"], f"{frame.velocity:.6f} rad/s")
-        dpg.set_value(self.tags["value_output"], f"{frame.output:.6f}")
-        dpg.set_value(self.tags["value_position"], f"{frame.position:.6f} rad")
-        dpg.set_value(self.tags["value_voltage"], f"{frame.voltage:.6f} V")
-        dpg.set_value(self.tags["value_hex"], format_hex(raw))
+
+        if state_reply is not None:
+            dpg.set_value(self.tags["value_motor_id"], str(state_reply.motor_id))
+            dpg.set_value(
+                self.tags["value_mode"],
+                self.config.control_mode_labels.get(state_reply.control_mode, f"模式 {state_reply.control_mode}"),
+            )
+            dpg.set_value(self.tags["value_target"], f"{state_reply.target:.6f}")
+            dpg.set_value(self.tags["value_velocity"], f"{state_reply.velocity:.6f} rad/s")
+            dpg.set_value(self.tags["value_output"], f"{state_reply.output:.6f}")
+            dpg.set_value(self.tags["value_position"], f"{state_reply.position:.6f} rad")
+            dpg.set_value(self.tags["value_voltage"], f"{state_reply.voltage:.6f} V")
+            dpg.set_value(
+                self.tags["value_status"],
+                f"0x{state_reply.health_status:02X} ({parse_status(state_reply.health_status)})",
+            )
+
+        if param_reply is not None:
+            param_label = self.config.param_labels.get(param_reply.param_id, f"参数 {param_reply.param_id}")
+            dpg.set_value(self.tags["last_param"], f"{param_label} = {param_reply.value:.6f}")
+
+        if calib_reply is not None:
+            calib_label = self.config.calib_state_labels.get(calib_reply.calib_state, str(calib_reply.calib_state))
+            dpg.set_value(self.tags["last_calib"], f"{calib_label} ({calib_reply.progress}%)")
+
+        dpg.set_value(self.tags["value_hex"], self.state.last_raw_hex)
+
+        if snapshot_reply is not None:
+            lines = [
+                f"motor_id = {snapshot_reply.motor_id}",
+                f"snapshot_version = {snapshot_reply.snapshot_version}",
+            ]
+            lines.extend(snapshot_reply.snapshot.to_lines())
+            dpg.set_value(self.tags["snapshot_text"], "\n".join(lines))
 
     def _update_plots(self) -> None:
         for key, series_tag in (
@@ -834,7 +1701,13 @@ class FOCGuiApp:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="FOC Controller DearPyGui 上位机")
     parser.add_argument("port", nargs="?", default="", help="启动时默认串口，例如 COM3")
-    parser.add_argument("baudrate", nargs="?", default=DEFAULT_BAUDRATE, type=int, help="启动时默认波特率")
+    parser.add_argument(
+        "baudrate",
+        nargs="?",
+        default=DEFAULT_BAUDRATE,
+        type=int,
+        help="启动时默认波特率",
+    )
     return parser.parse_args()
 
 

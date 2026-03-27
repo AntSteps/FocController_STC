@@ -340,6 +340,16 @@
               <FilePath>.\Sources\uart_controller.c</FilePath>
             </File>
             <File>
+              <FileName>protocol_frame.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\protocol_frame.c</FilePath>
+            </File>
+            <File>
+              <FileName>protocol_parser.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\protocol_parser.c</FilePath>
+            </File>
+            <File>
               <FileName>encoder.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\encoder.c</FilePath>
@@ -353,6 +363,11 @@
               <FileName>calibration.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\calibration.c</FilePath>
+            </File>
+            <File>
+              <FileName>calibration_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\calibration_service.c</FilePath>
             </File>
             <File>
               <FileName>motor.c</FileName>
@@ -420,6 +435,11 @@
               <FilePath>.\Sources\param_storage.c</FilePath>
             </File>
             <File>
+              <FileName>param_registry.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\param_registry.c</FilePath>
+            </File>
+            <File>
               <FileName>control.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\control.c</FilePath>
@@ -428,6 +448,11 @@
               <FileName>command.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\Sources\command.c</FilePath>
+            </File>
+            <File>
+              <FileName>telemetry_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\telemetry_service.c</FilePath>
             </File>
             <File>
               <FileName>ai8051u_32_mdu32.lib</FileName>

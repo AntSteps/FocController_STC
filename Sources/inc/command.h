@@ -1,9 +1,8 @@
 #ifndef __COMMAND_H__
 #define __COMMAND_H__
 
-#include "uart_controller.h"
+#include "protocol_frame.h"
 
-void ProcessCommand(UartCommand *command);
-void UartReply(uint8_t seq);
+void ProcessCommand(const ProtocolRequest *request);
 
 #endif
