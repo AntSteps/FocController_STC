@@ -21,6 +21,7 @@
 // 参数结构体定义
 // 所有需要持久化的参数都放在这里
 ////////////////////////////////////////
+#pragma pack(1)
 typedef struct {
     // 魔数和版本 (用于校验)
     uint16 magic;
@@ -51,6 +52,7 @@ typedef struct {
     uint8  crc8;
 
 } ParamStorage_Data_t;
+#pragma pack()
 
 
 
@@ -76,6 +78,9 @@ void ParamStorage_ResetToDefault(void);
 // 获取参数结构体指针，用于直接访问和修改参数
 // 修改后需要手动调用 ParamStorage_Save() 保存
 ParamStorage_Data_t* ParamStorage_Get(void);
+
+// 返回本次上电是否成功从EEPROM加载到有效参数
+BOOL ParamStorage_WasLoadedFromEEPROM(void);
 
 
 #endif // __PARAM_STORAGE_H__

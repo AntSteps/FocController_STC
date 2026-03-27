@@ -5,14 +5,13 @@
 #include "control.h"
 
 
+// PID执行周期计数（5kHz / 300Hz ≈ 16.67，取17）
+#define PID_PERIOD_COUNT    17
+
 // 控制相关
 static uint8_t s_pid_counter = 0;     // PID计数器，用于分频
 static float s_cached_angle = 0.0f;   // 缓存的角度（用于速度计算）
 static float s_q_axis_voltage = 0.0f; // Q轴电压占空比（由速度环计算）
-
-// PID执行周期计数（5kHz / 300Hz ≈ 16.67，取17）
-#define PID_PERIOD_COUNT    17
-
 
 
 void Motor_Update(void)
@@ -34,8 +33,8 @@ void Motor_Update(void)
         s_q_axis_voltage = SpeedController_Update(s_cached_angle);
     }
 
-    // 更新SVPWM，使用速度环输出的Q轴电压
-    SVPWM_UpdateQAxis(elec_angle, 0.5);
+    // 更新SVPWM，使用固定Q轴电压进行闭环换相
+    SVPWM_UpdateQAxis(elec_angle, 0.2f);
 }
 
 // 获取当前缓存的机械角度（供其他模块使用）

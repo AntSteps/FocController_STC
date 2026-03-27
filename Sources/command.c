@@ -6,6 +6,14 @@
 #include "adc.h"
 #include "motor.h"
 
+#define REPLY_STATUS_ENCODER_FAULT      0x01u
+#define REPLY_STATUS_MOTOR_FAULT        0x02u
+#define REPLY_STATUS_ENC_MAG_SHIFT      2u
+#define REPLY_STATUS_ENC_PRESS          0x10u
+#define REPLY_STATUS_ENC_OVERSPEED      0x20u
+#define REPLY_STATUS_ENC_DATA_GOOD      0x40u
+#define REPLY_STATUS_PARAM_FROM_EEPROM  0x80u
+
 static void Command_DebugPulse(uint8_t count)
 {
     while (count--)
@@ -19,6 +27,7 @@ static void Command_DebugPulse(uint8_t count)
 
 static void ApplyControlCommand(CtrlCmdFrame *frame);
 static void ApplyParamCommand(ParamCmdFrame *frame);
+static uint8_t Command_BuildReplyStatus(void);
 void UartReply(uint8_t seq);
 void ProcessCommand(UartCommand *command)
 {
@@ -124,6 +133,50 @@ static void ApplyParamCommand(ParamCmdFrame *frame)
     ParamStorage_Save();
 }
 
+static uint8_t Command_BuildReplyStatus(void)
+{
+    uint8_t status;
+    uint8_t data_good;
+    uint8_t mag_field_status;
+    uint8_t speed_status;
+
+    status = 0u;
+    data_good = Encoder_Get_DataGood();
+    mag_field_status = Encoder_Get_MagFieldStatus();
+    speed_status = Encoder_Get_SpeedStatus();
+
+    if (data_good)
+    {
+        status |= REPLY_STATUS_ENC_DATA_GOOD;
+    }
+
+    status |= (uint8_t)((mag_field_status & 0x03u) << REPLY_STATUS_ENC_MAG_SHIFT);
+
+    if (Encoder_Get_PressStatus())
+    {
+        status |= REPLY_STATUS_ENC_PRESS;
+    }
+
+    if (speed_status)
+    {
+        status |= REPLY_STATUS_ENC_OVERSPEED;
+    }
+
+    if ((!data_good) ||
+        (mag_field_status != ENCODER_MAG_FIELD_NORMAL) ||
+        speed_status)
+    {
+        status |= REPLY_STATUS_ENCODER_FAULT;
+    }
+
+    if (ParamStorage_WasLoadedFromEEPROM())
+    {
+        status |= REPLY_STATUS_PARAM_FROM_EEPROM;
+    }
+
+    return status;
+}
+
 void UartReply(uint8_t seq)
 {
     uint8_t send_ok;
@@ -136,7 +189,7 @@ void UartReply(uint8_t seq)
     replyframe.output = Motor_GetQAxisVoltage();
     replyframe.position = Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle());
     replyframe.voltage = ADC_GetBusVoltage();
-    replyframe.status = 0x00;
+    replyframe.status = Command_BuildReplyStatus();
     replyframe.seq = seq;
     send_ok = send_messages(&replyframe);
 

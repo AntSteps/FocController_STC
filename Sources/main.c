@@ -56,6 +56,7 @@ void main(void)
     /* 从参数存储获取指针 */
     params = ParamStorage_Get();
     LoadStoredParamsToModules(params);
+    // calibrate();
 
 
     /* 将存储参数或默认参数加载到各模块 */
@@ -63,15 +64,15 @@ void main(void)
     SpeedController_SetTarget(20.0f);
     reply_seq = 0;
 
-    // TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
+    TIMER0_Run();       /* 启动定时器 开始foc控制循环 */
 
     while (1)
     {       
-        if (UARTController_GetCommand(&command))
-        {
+        // if (UARTController_GetCommand(&command))
+        // {
             UartReply(0); // 回复当前状态
             // ProcessCommand(&command);
-        }
+        // }
     }
 }
 
@@ -103,6 +104,7 @@ void SYS_Init(void)
     ADC_Init();     // ADC初始化
     SPI_Init();     // SPI初始化
     PWMA_Init();    /* 高级PWMA初始化 */
+    Motor_PowerOn_SelfTest();
     MATHLIB_Init(); /* MATH库初始化 */
     SVPWM_Init();   /* SVPWM初始化 */
     IAP_Init();

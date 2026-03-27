@@ -34,7 +34,7 @@ typedef struct
     float output;   // 当前控制输出（占空比）
     float position; // 转子当前位置
     float voltage;  // 电机电压
-    uint8_t status; // 0：就绪 0b1:编码器异常 0b10:电机异常
+    uint8_t status; // bit0:编码器异常 bit1:电机异常 bit3:2:磁场状态 bit4:按压 bit5:超速 bit6:CRC/数据有效 bit7:本次上电已从EEPROM加载参数
     uint8_t seq;    // 时间戳
     uint8_t crc8;   // 校验位
 } ReplyFrame; 

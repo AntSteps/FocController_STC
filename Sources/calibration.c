@@ -231,6 +231,7 @@ Motor_Calibration Motor_Calibration_AutoCalibrate(int pole_pairs)
     }
 
     /* 3) 扫完整机械一圈，拟合编码器偏心导致的一次/二次机械谐波 */
+    sum_diff = 0.0f;
     sum_diff_sq = 0.0f;
     sum_sin_1 = 0.0f;
     sum_cos_1 = 0.0f;

@@ -27,6 +27,7 @@ static ParamStorage_Data_t s_param_data;
 
 // 标志位
 static BOOL s_initialized = FALSE;
+static BOOL s_loaded_from_eeprom = FALSE;
 
 
 ////////////////////////////////////////
@@ -89,7 +90,7 @@ static void SetDefaultValues(void)
 
     // 电机校准默认参数
     s_param_data.motor_calib.pole_pairs = 7;
-    s_param_data.motor_calib.dir = 1;
+    s_param_data.motor_calib.dir = -1;
     s_param_data.motor_calib.electrical_offset_rad = 0.0f;
     s_param_data.motor_calib.harmonic_amp_1 = 0.0f;
     s_param_data.motor_calib.harmonic_phase_1 = 0.0f;
@@ -114,9 +115,12 @@ void ParamStorage_Init(void)
 
     // 尝试从EEPROM加载
     if (!ParamStorage_Load()) {
+        s_loaded_from_eeprom = FALSE;
         // 加载失败，使用默认值并保存
         SetDefaultValues();
         ParamStorage_Save();
+    } else {
+        s_loaded_from_eeprom = TRUE;
     }
 
     s_initialized = TRUE;
@@ -142,7 +146,7 @@ BOOL ParamStorage_Load(void)
     }
 
     // CRC8校验 (校验除crc8字段外的所有数据)
-    calc_crc = Mem_CRC8_Check((uint8 *)&temp, sizeof(ParamStorage_Data_t) - 1, 0);
+    calc_crc = Mem_CRC8_Check((uint8 *)&temp, sizeof(ParamStorage_Data_t) - sizeof(temp.crc8), 0);
     if (calc_crc != temp.crc8) {
         return FALSE;
     }
@@ -160,7 +164,9 @@ BOOL ParamStorage_Save(void)
     s_param_data.version = PARAM_STORAGE_VERSION;
 
     // 计算CRC8 (校验除crc8字段外的所有数据)
-    s_param_data.crc8 = Mem_CRC8_Check((uint8 *)&s_param_data, sizeof(ParamStorage_Data_t) - 1, 0);
+    s_param_data.crc8 = Mem_CRC8_Check((uint8 *)&s_param_data,
+                                       sizeof(ParamStorage_Data_t) - sizeof(s_param_data.crc8),
+                                       0);
 
     // 擦除EEPROM扇区
     IAP_EraseSector(PARAM_STORAGE_EEPROM_ADDR);
@@ -182,4 +188,9 @@ void ParamStorage_ResetToDefault(void)
 ParamStorage_Data_t* ParamStorage_Get(void)
 {
     return &s_param_data;
+}
+
+BOOL ParamStorage_WasLoadedFromEEPROM(void)
+{
+    return s_loaded_from_eeprom;
 }

@@ -16,7 +16,7 @@ void Encoder_Update()
 {
     (void)Encoder_UpdateAndGetAngle();
 }
-
+// 为了优化性能 默认是返回角度的
 float Encoder_UpdateAndGetAngle(void)
 {
     uint8_t b1;
@@ -40,6 +40,11 @@ float Encoder_UpdateAndGetAngle(void)
         raw_angle = ((uint16_t)b1 << 6) | ((uint16_t)b2 >> 2);
         angle = (float)raw_angle * ENCODER_ANGLE_SCALE;
         mag_status = ((b2 & 0x03) << 2) | (b3 >> 6);
+    }
+    else
+    {
+        /* 当前帧无效时，不沿用上一帧状态，避免串口误判编码器健康 */
+        mag_status = ENCODER_MAG_FIELD_INVALID;
     }
 
     return angle;
