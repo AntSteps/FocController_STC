@@ -38,7 +38,7 @@ void SPI_Init(void)
     SPI_IgnoreSS();                     //忽略SS脚
     SPI_DataMSB();                      //设置SPI数据顺序为MSB (高位在前)
     SPI_SetMode1();                     //设置SPI工作模式1 (CPOL=0, CPHA=1)
-    SPI_SetClockDivider4();             //设置SPI时钟分频
+    SPI_SetClockDivider16();             //设置SPI时钟分频
 
     HSSPI_Disable();                    //关闭SPI高速模式
 
