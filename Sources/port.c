@@ -20,6 +20,9 @@
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明  
+#define PORT_RSTFLAG_LVDRSTF_MASK               0x10u
+
+volatile unsigned char far PORT_RSTFLAG_REG _at_ 0x7EFE99;
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
 
@@ -56,9 +59,9 @@ void PORT0_Init(void)
 void PORT1_Init(void)
 {
     SetP1nInitLevelHigh(PIN_ALL);       //设置P1初始化电平
-    SetP1nQuasiMode(PIN_7 | PIN_6 | PIN_4 | PIN_3 | PIN_2 | PIN_0); //设置P1.7,P1.6,P1.4,P1.3,P1.2,P1.0为准双向口模式
+    SetP1nQuasiMode(PIN_6 | PIN_4 | PIN_3 | PIN_2 | PIN_0); //设置P1.6,P1.4,P1.3,P1.2,P1.0为准双向口模式
     SetP1nPushPullMode(PIN_5);          //设置P1.5为推挽输出模式
-    SetP1nHighZInputMode(PIN_1);        //设置P1.1为高阻输入模式
+    SetP1nHighZInputMode(PIN_7 | PIN_1); //设置P1.7,P1.1为高阻输入模式
 
     DisableP1nPullUp(PIN_ALL);          //关闭P1内部上拉电阻
     DisableP1nPullDown(PIN_ALL);        //关闭P1内部下拉电阻
@@ -66,6 +69,9 @@ void PORT1_Init(void)
     SetP1nSlewRateNormal(PIN_ALL);      //设置P1一般翻转速度
     SetP1nDrivingNormal(PIN_ALL);       //设置P1一般驱动能力
     SetP1nDigitalInput(PIN_ALL);        //使能P1数字信号输入功能
+
+    EnableP1nPullUp(PIN_7);
+    SetP1nDigitalInput(PIN_7);
 
     //<<AICUBE_USER_PORT1_INITIAL_BEGIN>>
     // 在此添加用户初始化代码  
@@ -145,6 +151,15 @@ void PORT5_Init(void)
 
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_BEGIN>>
 // 在此添加用户函数实现代码  
+uint8_t PORT_IsDriverNFaultActive(void)
+{
+    return (P17 == 0) ? 1u : 0u;
+}
+
+uint8_t PORT_IsLowVoltageReset(void)
+{
+    return ((uint8_t)PORT_RSTFLAG_REG & PORT_RSTFLAG_LVDRSTF_MASK) ? 1u : 0u;
+}
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 
 

@@ -27,14 +27,14 @@ uint8_t TelemetryService_BuildHealthStatus(void)
 
     status |= (uint8_t)((mag_field_status & 0x03u) << PROTOCOL_STATUS_ENC_MAG_SHIFT);
 
-    if (Encoder_Get_PressStatus())
+    if (PORT_IsLowVoltageReset())
     {
-        status |= PROTOCOL_STATUS_ENC_PRESS;
+        status |= PROTOCOL_STATUS_RESET_LOW_VOLTAGE;
     }
 
-    if (speed_status)
+    if (PORT_IsDriverNFaultActive())
     {
-        status |= PROTOCOL_STATUS_ENC_OVERSPEED;
+        status |= PROTOCOL_STATUS_DRIVER_NFAULT;
     }
 
     if ((!data_good) ||

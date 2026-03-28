@@ -9,6 +9,8 @@
 #ifndef __PORT_H__
 #define __PORT_H__
 
+#include "def.h"
+
 
 //<<AICUBE_USER_DEFINE_BEGIN>>
 // 在此添加用户宏定义  
@@ -20,6 +22,8 @@ void PORT1_Init(void);
 void PORT2_Init(void);
 void PORT3_Init(void);
 void PORT5_Init(void);
+uint8_t PORT_IsDriverNFaultActive(void);
+uint8_t PORT_IsLowVoltageReset(void);
 
 
 

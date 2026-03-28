@@ -50,8 +50,8 @@ STATUS_ENCODER_FAULT = 0x01
 STATUS_MOTOR_FAULT = 0x02
 STATUS_ENC_MAG_MASK = 0x0C
 STATUS_ENC_MAG_SHIFT = 2
-STATUS_ENC_PRESS = 0x10
-STATUS_ENC_OVERSPEED = 0x20
+STATUS_RESET_LOW_VOLTAGE = 0x10
+STATUS_DRIVER_NFAULT = 0x20
 STATUS_ENC_DATA_GOOD = 0x40
 STATUS_PARAM_FROM_EEPROM = 0x80
 
@@ -159,11 +159,11 @@ def parse_status(status):
     else:
         details.append("数据无效")
 
-    if status & STATUS_ENC_PRESS:
-        details.append("按压触发")
+    if status & STATUS_RESET_LOW_VOLTAGE:
+        details.append("低压复位")
 
-    if status & STATUS_ENC_OVERSPEED:
-        details.append("超速标志")
+    if status & STATUS_DRIVER_NFAULT:
+        details.append("驱动故障(nFAULT)")
 
     if status & STATUS_PARAM_FROM_EEPROM:
         details.append("参数来自EEPROM")
