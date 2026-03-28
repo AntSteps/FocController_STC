@@ -83,7 +83,7 @@ static void SVPWM_Update_Core(uint16_t base_index, float mag)
     int32_t duty_a, duty_b, duty_c;
     uint16_t idx_a, idx_b, idx_c;
 
-    // 获取三相的查表索引 (快速取模)
+    // 获取三相的查表索引 
     idx_a = base_index % SVPWM_LUT_SIZE;
     idx_b = (base_index + OFFSET_240_DEG) % SVPWM_LUT_SIZE;
     idx_c = (base_index + OFFSET_120_DEG) % SVPWM_LUT_SIZE;
@@ -92,13 +92,13 @@ static void SVPWM_Update_Core(uint16_t base_index, float mag)
     // 这一步把浮点彻底终结，接下来的计算全是定点整型
     mag_scaled = (int32_t)(mag * s_half_period);
 
-    // 查表 -> 乘法 -> >>12 缩放 -> 加上 half_period 中点偏置
+    // 查表 乘法 12 缩放 加上 中点偏置
     // 公式推导: duty = half_period + ( (LUT_val / 4096) * (mag * half_period) )
     duty_a = (int32_t)s_half_period + ((s_svpwm_lut[idx_a] * mag_scaled) >> 12);
     duty_b = (int32_t)s_half_period + ((s_svpwm_lut[idx_b] * mag_scaled) >> 12);
     duty_c = (int32_t)s_half_period + ((s_svpwm_lut[idx_c] * mag_scaled) >> 12);
 
-    // 极速限幅保护
+    // 限幅保护
     if (duty_a < 0) duty_a = 0; else if (duty_a > s_pwm_period) duty_a = s_pwm_period;
     if (duty_b < 0) duty_b = 0; else if (duty_b > s_pwm_period) duty_b = s_pwm_period;
     if (duty_c < 0) duty_c = 0; else if (duty_c > s_pwm_period) duty_c = s_pwm_period;

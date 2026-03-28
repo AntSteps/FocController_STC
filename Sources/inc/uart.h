@@ -1,11 +1,3 @@
-//<<AICUBE_USER_HEADER_REMARK_BEGIN>>
-////////////////////////////////////////
-// 在此添加用户文件头说明信息  
-// 文件名称: uart.h
-////////////////////////////////////////
-//<<AICUBE_USER_HEADER_REMARK_END>>
-
-
 #ifndef __UART_H__
 #define __UART_H__
 
@@ -24,10 +16,6 @@ void UART_ReleaseRxBuffer(void);
 void UART3_Init(void);
 
 extern uint8_t xdata pu8UR3DMATxBuffer[UART3_TX_DMA_BUFFER_SIZE];
-
-
-//<<AICUBE_USER_EXTERNAL_DECLARE_BEGIN>>
-//<<AICUBE_USER_EXTERNAL_DECLARE_END>>
 
 
 #endif
