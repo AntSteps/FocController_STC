@@ -51,6 +51,7 @@ from protocol_codec import (
 DEFAULT_POLL_HZ = 10.0
 DEFAULT_CALIB_POLL_HZ = 2.0
 REQUEST_TIMEOUT_SECONDS = 1.5
+MIN_HALF_DUPLEX_GAP_SECONDS = 0.003
 
 
 @dataclass
@@ -385,9 +386,11 @@ class SerialWorker:
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.05,
+                timeout=0.005,
                 write_timeout=0.2,
             )
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
         except serial.SerialException as exc:
             self.on_event("connection", {"connected": False, "message": f"串口打开失败: {exc}"})
             return
@@ -400,7 +403,7 @@ class SerialWorker:
         try:
             while not self._stop_event.is_set():
                 self._drain_tx_queue()
-                incoming = self._serial.read(256)
+                incoming = self._serial.read(max(1, int(self._serial.in_waiting or 0)))
                 if incoming:
                     self._buffer.extend(incoming)
                     self._process_rx_buffer()
@@ -537,6 +540,7 @@ class ProtocolService:
         self.connected = False
         self.sequence_counter = 0
         self.pending_request: Optional[PendingRequest] = None
+        self.ready_after = 0.0
         self._worker_events: "Queue[Tuple[str, object]]" = Queue()
         self._events: "Queue[Tuple[str, object]]" = Queue()
 
@@ -546,7 +550,7 @@ class ProtocolService:
 
     @property
     def is_waiting_reply(self) -> bool:
-        return self.pending_request is not None
+        return (self.pending_request is not None) or (time.monotonic() < self.ready_after)
 
     def connect(self, port: str, baudrate: int) -> None:
         if self.worker is not None:
@@ -555,6 +559,7 @@ class ProtocolService:
 
         self.connected = False
         self.pending_request = None
+        self.ready_after = 0.0
         self.worker = SerialWorker(port=port, baudrate=baudrate, on_event=self._post_worker_event)
         self.worker.start()
 
@@ -563,6 +568,7 @@ class ProtocolService:
         self.worker = None
         self.connected = False
         self.pending_request = None
+        self.ready_after = 0.0
         if worker is not None:
             worker.stop()
 
@@ -692,6 +698,10 @@ class ProtocolService:
             self._emit("error", "串口未连接，无法发送")
             return
 
+        if time.monotonic() < self.ready_after:
+            self._emit("error", "半双工切换等待中，请稍后再发送")
+            return
+
         if self.pending_request is not None:
             age_ms = (time.monotonic() - self.pending_request.timestamp) * 1000.0
             self._emit(
@@ -742,6 +752,7 @@ class ProtocolService:
 
         timed_out = self.pending_request
         self.pending_request = None
+        self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
         self._emit(
             "timeout",
             {
@@ -772,6 +783,7 @@ class ProtocolService:
         self.connected = bool(info.get("connected"))
         if not self.connected:
             self.pending_request = None
+            self.ready_after = 0.0
             self.worker = None
         self._emit("connection", info)
 
@@ -784,6 +796,7 @@ class ProtocolService:
             and int(expected_seq) == self.pending_request.seq
         ):
             self.pending_request = None
+            self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
         self._emit("error", str(info.get("message", "串口发送失败")))
 
     def _handle_rx_event(self, payload: object) -> None:
@@ -798,6 +811,7 @@ class ProtocolService:
                 matched_summary = self.pending_request.summary
                 latency_ms = (time.monotonic() - self.pending_request.timestamp) * 1000.0
                 self.pending_request = None
+                self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
 
         enriched = dict(info)
         enriched["matched_summary"] = matched_summary

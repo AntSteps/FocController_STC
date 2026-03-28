@@ -2,7 +2,6 @@
 #include "uart.h"
 #include <string.h>
 
-static uint8_t s_protocol_rx_frame[UART3_RX_DMA_BUFFER_SIZE];
 static uint8_t s_protocol_rx_stream[PROTOCOL_MAX_FRAME_SIZE];
 static uint8_t s_protocol_rx_stream_len = 0u;
 static uint8_t s_protocol_tx_frame[PROTOCOL_MAX_FRAME_SIZE];
@@ -16,6 +15,7 @@ static void ProtocolController_AppendChunk(const uint8_t *chunk, uint8_t chunk_l
 
     if ((uint16_t)s_protocol_rx_stream_len + (uint16_t)chunk_len > (uint16_t)sizeof(s_protocol_rx_stream))
     {
+        /* 保护流缓冲不越界：丢弃旧的残片，从最新 chunk 重新同步。 */
         s_protocol_rx_stream_len = 0u;
     }
 
@@ -112,8 +112,10 @@ void ProtocolController_Init(void)
 
 BOOL ProtocolController_PumpRx(ProtocolRequest *request)
 {
+    ProtocolRequest latest_request;
     uint8_t rx_len;
     uint8_t xdata *rx_buffer;
+    BOOL found_request;
 
     if (request == (ProtocolRequest *)0)
     {
@@ -130,14 +132,21 @@ BOOL ProtocolController_PumpRx(ProtocolRequest *request)
 
         if (rx_len <= UART3_RX_DMA_BUFFER_SIZE)
         {
-            memcpy(s_protocol_rx_frame, rx_buffer, rx_len);
-            ProtocolController_AppendChunk(s_protocol_rx_frame, rx_len);
+            ProtocolController_AppendChunk(rx_buffer, rx_len);
         }
 
         UART_ReleaseRxBuffer();
     }
 
-    return ProtocolController_ExtractRequest(request);
+    found_request = FALSE;
+    while (ProtocolController_ExtractRequest(&latest_request))
+    {
+        /* 主循环本轮仅消费一条请求，这里保留最新一条。 */
+        *request = latest_request;
+        found_request = TRUE;
+    }
+
+    return found_request;
 }
 
 BOOL ProtocolController_SendReply(const ProtocolReply *reply)

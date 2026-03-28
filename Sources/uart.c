@@ -3,11 +3,17 @@
 
 sbit RS485_DIR = P2 ^ 5;
 sbit UART_DEBUG = P0 ^ 3;
-static uint8_t xdata s_uart3_rx_dma_buffer[2][UART3_RX_DMA_BUFFER_SIZE];
-static volatile uint8_t s_uart3_rx_len[2] = {0};
+#define UART3_RX_SLOT_COUNT  4u
+#define UART3_INVALID_SLOT   0xFFu
+static uint8_t xdata s_uart3_rx_dma_buffer[UART3_RX_SLOT_COUNT][UART3_RX_DMA_BUFFER_SIZE];
+static volatile uint8_t s_uart3_rx_len[UART3_RX_SLOT_COUNT] = {0};
 static volatile uint8_t s_rx_active_index = 0; // 当前接收的
-static volatile uint8_t s_rx_read_index = 0xFF;
+static volatile uint8_t s_rx_publish_index = UART3_INVALID_SLOT;
+static volatile uint8_t s_rx_pending_count = 0u;
+static volatile uint8_t s_rx_read_index = UART3_INVALID_SLOT;
 static volatile BOOL s_rx_locked = 0;
+static volatile uint8_t s_uart3_rx_activity = 0u;
+static volatile uint8_t s_uart3_timeout_retry = 0u;
 static volatile uint8_t s_uart3_tx_ready = 1; // 串口3发送DMA是否准备好
 static void UART_DebugPulse(uint8_t count)
 {
@@ -60,19 +66,115 @@ static uint8_t UART3_WaitLockTx(void)
     return 0;
 }
 
-static void UART3_RestartRx(void)
+static uint8_t UART3_FindFreeRxSlot(uint8_t start_index)
 {
-    DMA_UART3_ClearRxFlag();
-    DMA_UART3_ClearFIFO();
-    DMA_UART3_SetRxAddress(s_uart3_rx_dma_buffer[s_rx_active_index]);
-    DMA_UART3_TriggerRx();
+    uint8_t index;
+    uint8_t count;
+
+    index = start_index;
+    for (count = 0u; count < UART3_RX_SLOT_COUNT; count++)
+    {
+        if (index >= UART3_RX_SLOT_COUNT)
+        {
+            index = 0u;
+        }
+
+        if (s_uart3_rx_len[index] == 0u)
+        {
+            return index;
+        }
+
+        index++;
+    }
+
+    return UART3_INVALID_SLOT;
 }
 
+static uint8_t UART3_FindNextPendingSlot(uint8_t start_index)
+{
+    uint8_t index;
+    uint8_t count;
+
+    index = start_index;
+    for (count = 0u; count < UART3_RX_SLOT_COUNT; count++)
+    {
+        if (index >= UART3_RX_SLOT_COUNT)
+        {
+            index = 0u;
+        }
+
+        if ((s_uart3_rx_len[index] != 0u) &&
+            ((!s_rx_locked) || (index != s_rx_read_index)))
+        {
+            return index;
+        }
+
+        index++;
+    }
+
+    return UART3_INVALID_SLOT;
+}
+
+static void UART3_ClearRxSlot(uint8_t slot_index)
+{
+    memset(s_uart3_rx_dma_buffer[slot_index], 0x00, UART3_RX_DMA_BUFFER_SIZE);
+}
+
+static void UART3_ResetRxState(void)
+{
+    uint8_t index;
+
+    s_rx_active_index = 0u;
+    s_rx_publish_index = UART3_INVALID_SLOT;
+    s_rx_pending_count = 0u;
+    s_rx_read_index = UART3_INVALID_SLOT;
+    s_rx_locked = 0;
+    s_uart3_rx_activity = 0u;
+    s_uart3_timeout_retry = 0u;
+
+    for (index = 0u; index < UART3_RX_SLOT_COUNT; index++)
+    {
+        s_uart3_rx_len[index] = 0u;
+        UART3_ClearRxSlot(index);
+    }
+}
+
+// static void UART3_RestartRx(void)
+// {
+//     s_uart3_rx_activity = 0u;
+//     s_uart3_timeout_retry = 0u;
+//     UART3_ClearRxSlot(s_rx_active_index);
+//     DMA_UART3_ClearRxFlag();
+//     DMA_UART3_ClearFIFO();
+//     DMA_UART3_SetRxAddress(s_uart3_rx_dma_buffer[s_rx_active_index]);
+//     DMA_UART3_TriggerRx();
+// }
+static void UART3_RestartRx(void)
+{
+    s_uart3_rx_activity = 0u;
+    s_uart3_timeout_retry = 0u;
+    
+    // 关闭 DMA，复位内部状态
+    DMA_UART3_DisableRx(); 
+
+    // 清除中断标志和底层 FIFO 里的残余字节
+    DMA_UART3_ClearRxFlag();
+    DMA_UART3_ClearFIFO();
+    
+    // 重新装载地址和最大长度
+    DMA_UART3_SetRxAddress(s_uart3_rx_dma_buffer[s_rx_active_index]);
+    DMA_UART3_SetRxAmount(UART3_RX_DMA_BUFFER_SIZE - 1); 
+    
+    // 重新启动
+    DMA_UART3_EnableRx();  
+    DMA_UART3_TriggerRx();
+}
 static void UART3_PublishRx(uint8_t rx_len)
 {
     uint8_t publish_index;
+    uint8_t next_active_index;
 
-    if (rx_len == 0 || s_rx_locked)
+    if (rx_len == 0)
     {
         UART3_RestartRx();
         return;
@@ -83,19 +185,21 @@ static void UART3_PublishRx(uint8_t rx_len)
     }
 
     publish_index = s_rx_active_index;
-    if (s_uart3_rx_len[publish_index] != 0u)
+    next_active_index = UART3_FindFreeRxSlot((uint8_t)(publish_index + 1u));
+    if ((next_active_index == UART3_INVALID_SLOT) || (next_active_index == publish_index))
     {
-        publish_index = (uint8_t)((publish_index + 1u) % 2u);
-        if (s_uart3_rx_len[publish_index] != 0u)
-        {
-            UART3_RestartRx();
-            return;
-        }
-        s_rx_active_index = publish_index;
+        UART3_RestartRx();
+        return;
     }
 
-    s_uart3_rx_len[s_rx_active_index] = rx_len;
-    s_rx_active_index = (uint8_t)((s_rx_active_index + 1u) % 2u);
+    s_uart3_rx_len[publish_index] = rx_len;
+    if (s_rx_pending_count == 0u)
+    {
+        s_rx_publish_index = publish_index;
+    }
+    s_rx_pending_count++;
+    s_uart3_timeout_retry = 0u;
+    s_rx_active_index = next_active_index;
     UART3_RestartRx();
 }
 
@@ -106,6 +210,7 @@ static void UART3_PublishRx(uint8_t rx_len)
 ////////////////////////////////////////
 void UART3_Init(void)
 {
+    UART3_ResetRxState();
     UART3_SwitchP5051(); // 设置串口数据端口: RxD3 (P5.0), TxD3 (P5.1)
     SetP5nAutoMode(PIN_0 | PIN_1);
 
@@ -118,8 +223,8 @@ void UART3_Init(void)
     DMA_UART3_SetTxAddress(pu8UR3DMATxBuffer);           // 设置串口DMA发送缓冲区地址
     DMA_UART3_SetInterval(0);                            // 设置串口DMA发送/接收字节间隔时间（系统时钟）
     DMA_UART3_ClearTxFlag();                             // 清除串口发送DMA中断标志
-    DMA_UART3_SetTxBusPriority(0);                       // 设置总线访问为最低优先级
-    DMA_UART3_SetTxIntPriority(0);                       // 设置中断为最低优先级
+    DMA_UART3_SetTxBusPriority(2);                       // 发送DMA保持较高优先级，避免回包尾部被拖延
+    DMA_UART3_SetTxIntPriority(3);                       // 发送完成需要尽快切回接收
     DMA_UART3_EnableTxInt();                             // 使能串口3DMA发送中断
     DMA_UART3_EnableTx();                                // 使能串口3DMA发送功能
 
@@ -128,8 +233,8 @@ void UART3_Init(void)
     DMA_UART3_SetInterval(0);                                         // 设置串口DMA发送/接收字节间隔时间（系统时钟）
     DMA_UART3_ClearFIFO();                                            // 清空串口DMA接收FIFO缓冲区
     DMA_UART3_ClearRxFlag();                                          // 清除串口接收DMA中断标志
-    DMA_UART3_SetRxBusPriority(0);                                    // 设置总线访问为最低优先级
-    DMA_UART3_SetRxIntPriority(0);                                    // 设置中断为最低优先级
+    DMA_UART3_SetRxBusPriority(3);                                    // 接收DMA优先级尽量提高，避免被FOC更新打断
+    DMA_UART3_SetRxIntPriority(3);                                    // 接收完成优先处理，降低丢命令概率
     DMA_UART3_EnableRxInt();                                          // 使能串口3DMA接收中断
     DMA_UART3_EnableRx();                                             // 使能串口3DMA接收功能
     DMA_UART3_TriggerRx();
@@ -141,6 +246,7 @@ void UART3_Init(void)
     UART3_ClearTimeoutFlag();
     UART3_EnableTimeout();
     UART3_EnableTimeoutInt();
+    UART3_SetIntPriority(1); // 总线空闲中断高于TIMER0，避免收满一帧后迟迟得不到处理
     UART3_EnableInt();
     UART3_ClearTxFlag();
 
@@ -202,6 +308,7 @@ void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
     if (DMA_UART3_CheckRxFlag()) // 判断串口接收DMA中断
     {
         DMA_UART3_ClearRxFlag();
+        s_uart3_rx_activity = 1u;
         UART3_PublishRx(UART3_RX_DMA_BUFFER_SIZE);
         //基本上不考虑 这种情况 基本都可以用总线空闲的包来触发
     }
@@ -210,6 +317,8 @@ void DMA_UART3RX_ISR(void) interrupt DMA_UR3R_VECTOR
 
 void UART3_ISR(void) interrupt UART3_VECTOR
 {
+    uint8_t rx_count;
+
     if (UART3_CheckTxFlag())
     {
         UART3_ClearTxFlag();
@@ -218,12 +327,26 @@ void UART3_ISR(void) interrupt UART3_VECTOR
     {
         UART_DEBUG = 0;
         UART3_ClearTimeoutFlag();
-        UART3_PublishRx(UART3_GetRxCount());
+        rx_count = UART3_GetRxCount();
+        if (rx_count > 0u)
+        {
+            s_uart3_rx_activity = 1u;
+            UART3_PublishRx(rx_count);
+        }
+        else if ((s_uart3_rx_activity != 0u) && (s_uart3_timeout_retry == 0u))
+        {
+            s_uart3_timeout_retry = 1u;
+        }
+        else
+        {
+            UART3_RestartRx();
+        }
         UART_DEBUG = 1;
     }
 
     if (UART3_CheckRxFlag())
     {
+        s_uart3_rx_activity = 1u;
         UART3_ClearRxFlag();
     }
 }
@@ -249,29 +372,26 @@ uint8_t xdata *UART_GetRxBuffer(uint8_t *len)
         return (uint8_t xdata *)0;
     }
 
-    if ((s_uart3_rx_len[0] == 0u) && (s_uart3_rx_len[1] == 0u))
+    if ((s_rx_pending_count == 0u) || (s_rx_publish_index == UART3_INVALID_SLOT))
     {
         EA = ea_state;
         *len = 0;
         return (uint8_t xdata *)0;
     }
 
-    if ((s_uart3_rx_len[0] != 0u) && (s_uart3_rx_len[1] != 0u))
-    {
-        read_index = s_rx_active_index;
-    }
-    else if (s_uart3_rx_len[0] != 0u)
-    {
-        read_index = 0u;
-    }
-    else
-    {
-        read_index = 1u;
-    }
-
+    read_index = s_rx_publish_index;
     s_rx_locked = 1;
     s_rx_read_index = read_index;
     *len = s_uart3_rx_len[read_index];
+    s_rx_pending_count--;
+    if (s_rx_pending_count == 0u)
+    {
+        s_rx_publish_index = UART3_INVALID_SLOT;
+    }
+    else
+    {
+        s_rx_publish_index = UART3_FindNextPendingSlot((uint8_t)(read_index + 1u));
+    }
     EA = ea_state;
     return (uint8_t xdata *)s_uart3_rx_dma_buffer[read_index];
 }
@@ -282,7 +402,7 @@ void UART_ReleaseRxBuffer(void)
 
     ea_state = EA;
     DisableGlobalInt();
-    if (!s_rx_locked || (s_rx_read_index >= 2))
+    if (!s_rx_locked || (s_rx_read_index >= UART3_RX_SLOT_COUNT))
     {
         EA = ea_state;
         return;
@@ -291,7 +411,7 @@ void UART_ReleaseRxBuffer(void)
     s_uart3_rx_len[s_rx_read_index] = 0;
     // memset((void *)s_uart3_rx_dma_buffer[s_rx_read_index], 0, UART3_RX_DMA_BUFFER_SIZE);
     s_rx_locked = 0;
-    s_rx_read_index = 0xFF;
+    s_rx_read_index = UART3_INVALID_SLOT;
     EA = ea_state;
 }
 
@@ -313,7 +433,7 @@ uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len)
         return 0;
     }
 
-    memset(pu8UR3DMATxBuffer, 0x00, sizeof(pu8UR3DMATxBuffer));
+    /* DMA 发送长度已单独配置，无需每次清空整块缓冲。 */
     memcpy(pu8UR3DMATxBuffer, pData, len);
     DMA_UART3_SetTxAmount((uint16_t)(len - 1u));
     DMA_UART3_ClearTxFlag();

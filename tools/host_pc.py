@@ -8,7 +8,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 import time
-from typing import Deque, Dict, List, Optional
+from typing import Callable, Deque, Dict, List, Optional
 
 from protocol_codec import (
     CALIB_STATE_FAIL_BUSY,
@@ -81,6 +81,12 @@ class ChoiceOption:
     value: int
     label: str
     description: str = ""
+
+
+@dataclass
+class QueuedCommand:
+    summary: str
+    callback: Callable[[], None]
 
 
 @dataclass
@@ -202,6 +208,7 @@ class FOCGuiApp:
         self.initial_baudrate = initial_baudrate
         self.service = ProtocolService()
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
+        self.pending_commands: Deque[QueuedCommand] = deque()
         self.plot_dirty = False
         self.font_status = "未加载中文字体"
         self.next_state_poll_at = 0.0
@@ -578,12 +585,14 @@ class FOCGuiApp:
             self._append_log("ERR", "请选择串口后再连接")
             return
 
+        self.pending_commands.clear()
         self.next_state_poll_at = time.monotonic()
         self.next_calib_poll_at = time.monotonic()
         dpg.set_value(self.tags["status_text"], f"连接中: {port} @ {baudrate}")
         self.service.connect(port=port, baudrate=baudrate)
 
     def disconnect(self) -> None:
+        self.pending_commands.clear()
         self.service.disconnect()
 
     def clear_logs(self) -> None:
@@ -614,25 +623,40 @@ class FOCGuiApp:
             self._append_log("ERR", f"未知控制模式: {mode_label}")
             return
 
+        motor_id = self._selected_motor_id()
         seq = self._next_seq()
-        self.service.send_control(
-            motor_id=self._selected_motor_id(),
-            ctrl_mode=mode.value,
-            target=float(dpg.get_value(self.tags["control_target"])),
-            ff0=float(dpg.get_value(self.tags["control_ff0"])),
-            ff1=float(dpg.get_value(self.tags["control_ff1"])),
-            seq=seq,
+        target = float(dpg.get_value(self.tags["control_target"]))
+        ff0 = float(dpg.get_value(self.tags["control_ff0"]))
+        ff1 = float(dpg.get_value(self.tags["control_ff1"]))
+        summary = f"控制命令 ID={motor_id} seq={seq} mode={mode.label} target={target:.3f}"
+        self._schedule_user_command(
+            summary,
+            lambda motor_id=motor_id, ctrl_mode=mode.value, target=target, ff0=ff0, ff1=ff1, seq=seq: (
+                self.service.send_control(
+                    motor_id=motor_id,
+                    ctrl_mode=ctrl_mode,
+                    target=target,
+                    ff0=ff0,
+                    ff1=ff1,
+                    seq=seq,
+                )
+            ),
         )
 
     def send_stop_command(self) -> None:
+        motor_id = self._selected_motor_id()
         seq = self._next_seq()
-        self.service.send_control(
-            motor_id=self._selected_motor_id(),
-            ctrl_mode=CTRL_MODE_STOP,
-            target=0.0,
-            ff0=0.0,
-            ff1=0.0,
-            seq=seq,
+        summary = f"停止命令 ID={motor_id} seq={seq}"
+        self._schedule_user_command(
+            summary,
+            lambda motor_id=motor_id, seq=seq: self.service.send_control(
+                motor_id=motor_id,
+                ctrl_mode=CTRL_MODE_STOP,
+                target=0.0,
+                ff0=0.0,
+                ff1=0.0,
+                seq=seq,
+            ),
         )
 
     def send_param_write(self) -> None:
@@ -642,18 +666,29 @@ class FOCGuiApp:
             self._append_log("ERR", f"未知参数项: {param_label}")
             return
 
+        motor_id = self._selected_motor_id()
         seq = self._next_seq()
-        self.service.send_param_write(
-            motor_id=self._selected_motor_id(),
-            param_id=param.value,
-            value=float(dpg.get_value(self.tags["write_param_value"])),
-            seq=seq,
+        value = float(dpg.get_value(self.tags["write_param_value"]))
+        summary = f"参数写入 ID={motor_id} seq={seq} param={param.label} value={value:.6f}"
+        self._schedule_user_command(
+            summary,
+            lambda motor_id=motor_id, param_id=param.value, value=value, seq=seq: self.service.send_param_write(
+                motor_id=motor_id,
+                param_id=param_id,
+                value=value,
+                seq=seq,
+            ),
         )
 
     def send_state_query(self) -> None:
-        self.service.query_state(
-            motor_id=self._selected_motor_id(),
-            seq=self._next_seq(),
+        motor_id = self._selected_motor_id()
+        seq = self._next_seq()
+        self._schedule_user_command(
+            f"读取状态 ID={motor_id} seq={seq}",
+            lambda motor_id=motor_id, seq=seq: self.service.query_state(
+                motor_id=motor_id,
+                seq=seq,
+            ),
         )
 
     def send_param_query(self) -> None:
@@ -662,32 +697,79 @@ class FOCGuiApp:
         if param is None:
             self._append_log("ERR", f"未知参数项: {param_label}")
             return
-        self.service.query_param(
-            motor_id=self._selected_motor_id(),
-            param_id=param.value,
-            seq=self._next_seq(),
+
+        motor_id = self._selected_motor_id()
+        seq = self._next_seq()
+        self._schedule_user_command(
+            f"读取参数 ID={motor_id} seq={seq} param={param.label}",
+            lambda motor_id=motor_id, param_id=param.value, seq=seq: self.service.query_param(
+                motor_id=motor_id,
+                param_id=param_id,
+                seq=seq,
+            ),
         )
 
     def send_snapshot_query(self) -> None:
-        self.service.query_snapshot(
-            motor_id=self._selected_motor_id(),
-            seq=self._next_seq(),
+        motor_id = self._selected_motor_id()
+        seq = self._next_seq()
+        self._schedule_user_command(
+            f"读取快照 ID={motor_id} seq={seq}",
+            lambda motor_id=motor_id, seq=seq: self.service.query_snapshot(
+                motor_id=motor_id,
+                seq=seq,
+            ),
         )
 
     def send_calibration_query(self) -> None:
-        self.service.query_calibration_status(
-            motor_id=self._selected_motor_id(),
-            seq=self._next_seq(),
+        motor_id = self._selected_motor_id()
+        seq = self._next_seq()
+        self._schedule_user_command(
+            f"读取校准状态 ID={motor_id} seq={seq}",
+            lambda motor_id=motor_id, seq=seq: self.service.query_calibration_status(
+                motor_id=motor_id,
+                seq=seq,
+            ),
         )
 
     def send_calibration_start(self) -> None:
-        self.service.start_calibration(
-            motor_id=self._selected_motor_id(),
-            seq=self._next_seq(),
+        motor_id = self._selected_motor_id()
+        seq = self._next_seq()
+        self._schedule_user_command(
+            f"启动校准 ID={motor_id} seq={seq}",
+            lambda motor_id=motor_id, seq=seq: self.service.start_calibration(
+                motor_id=motor_id,
+                seq=seq,
+            ),
         )
 
     def send_raw_command(self) -> None:
-        self.service.send_raw_hex(str(dpg.get_value(self.tags["raw_hex"])))
+        raw_text = str(dpg.get_value(self.tags["raw_hex"]))
+        self._schedule_user_command(
+            "发送原始帧",
+            lambda raw_text=raw_text: self.service.send_raw_hex(raw_text),
+        )
+
+    def _schedule_user_command(self, summary: str, callback: Callable[[], None]) -> None:
+        if self.pending_commands:
+            self.pending_commands.append(QueuedCommand(summary=summary, callback=callback))
+            self._append_log("SYS", f"手动命令已排队({len(self.pending_commands)}): {summary}")
+            return
+
+        if self.service.is_connected and self.service.is_waiting_reply:
+            self.pending_commands.append(QueuedCommand(summary=summary, callback=callback))
+            self._append_log("SYS", f"总线忙，手动命令已排队: {summary}")
+            return
+
+        callback()
+
+    def _dispatch_pending_user_command(self) -> bool:
+        if not self.pending_commands:
+            return False
+
+        queued = self.pending_commands.popleft()
+        self._append_log("SYS", f"优先发送手动命令: {queued.summary}")
+        queued.callback()
+        return True
 
     def _process_events(self) -> None:
         for event_type, payload in self.service.poll_events():
@@ -713,27 +795,39 @@ class FOCGuiApp:
         if self.service.is_waiting_reply:
             return
 
+        if self._dispatch_pending_user_command():
+            return
+
         now = time.monotonic()
-
-        if dpg.get_value(self.tags["poll_enabled"]):
-            state_hz = max(0.2, float(dpg.get_value(self.tags["poll_hz"])))
-            if now >= self.next_state_poll_at:
-                self.send_state_query()
-                self.next_state_poll_at = now + (1.0 / state_hz)
-
         calib_running = (
             self.state.last_calib is not None and self.state.last_calib.calib_state == CALIB_STATE_RUNNING
         )
+
+        if dpg.get_value(self.tags["poll_enabled"]) and (not calib_running):
+            state_hz = max(0.2, float(dpg.get_value(self.tags["poll_hz"])))
+            if now >= self.next_state_poll_at:
+                self.service.query_state(
+                    motor_id=self._selected_motor_id(),
+                    seq=self._next_seq(),
+                )
+                self.next_state_poll_at = now + (1.0 / state_hz)
+
         if dpg.get_value(self.tags["calib_poll_enabled"]) or calib_running:
             calib_hz = max(0.2, float(dpg.get_value(self.tags["calib_poll_hz"])))
             if now >= self.next_calib_poll_at:
-                self.send_calibration_query()
+                self.service.query_calibration_status(
+                    motor_id=self._selected_motor_id(),
+                    seq=self._next_seq(),
+                )
                 self.next_calib_poll_at = now + (1.0 / calib_hz)
 
     def _handle_connection_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
         connected = bool(info.get("connected"))
         message = str(info.get("message", ""))
+
+        if not connected:
+            self.pending_commands.clear()
 
         dpg.set_value(self.tags["status_text"], message or ("已连接" if connected else "未连接"))
         self._append_log("SYS", message or ("已连接" if connected else "已断开"))
@@ -893,8 +987,9 @@ class FOCGuiApp:
             dpg.set_value(series_tag, [samples, values])
 
     def _append_log(self, level: str, message: str) -> None:
-        timestamp = time.strftime("%H:%M:%S")
-        self.log_lines.append(f"[{timestamp}] [{level}] {message}")
+        now = time.time()
+        timestamp = time.strftime("%H:%M:%S", time.localtime(now))
+        self.log_lines.append(f"[{timestamp}.{int((now - int(now)) * 1000):03d}] [{level}] {message}")
         dpg.set_value(self.tags["log_text"], "\n".join(self.log_lines))
 
 
