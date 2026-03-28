@@ -70,11 +70,11 @@ static void SetDefaultValues(void)
     s_param_data.cur_ki = 0.01f;
 
     // 速度环默认参数
-    s_param_data.speed_ctrl_params.kp = 0.001f;
-    s_param_data.speed_ctrl_params.ki = 0.000f;
+    s_param_data.speed_ctrl_params.kp = 0.01f;
+    s_param_data.speed_ctrl_params.ki = 0.00001f;
     s_param_data.speed_ctrl_params.out_max = 1.0f;
     s_param_data.speed_ctrl_params.out_min = -1.0f;
-    s_param_data.speed_ctrl_params.lpf_time_constant_ms = 5.0f;
+    s_param_data.speed_ctrl_params.lpf_time_constant_ms = 100.0f;
     s_param_data.speed_ctrl_params.ff.velocity_gain = 0.0f;
     s_param_data.speed_ctrl_params.ff.acceleration_gain = 0.0f;
     s_param_data.speed_ctrl_params.ff.friction_compensation = 0.0f;
