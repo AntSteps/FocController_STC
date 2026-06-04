@@ -6,7 +6,12 @@ from __future__ import annotations
 import argparse
 from collections import deque
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
 import time
 from typing import Callable, Deque, Dict, List, Optional
 
@@ -68,11 +73,194 @@ WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/Dengb.ttf"),
 ]
 
+LINUX_FONT_CANDIDATES = [
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJKSC-Regular.otf"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+    Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+    Path("/usr/share/fonts/truetype/arphic/ukai.ttc"),
+    Path("/usr/share/fonts/truetype/arphic/uming.ttc"),
+    Path("/usr/share/fonts/sarasa-gothic/Sarasa-Regular.ttc"),
+    Path("/usr/share/fonts/MiSans-Regular.ttf"),
+    Path("/usr/share/fonts/PingFang SC Regular.ttf"),
+    Path("/usr/share/fonts/PingFang SC Bold.ttf"),
+    Path.home() / ".local/share/fonts/NotoSansCJK-Regular.ttc",
+    Path.home() / ".local/share/fonts/SourceHanSansSC-Regular.otf",
+]
 
-def find_cjk_font() -> Optional[Path]:
-    for font_path in WINDOWS_FONT_CANDIDATES:
-        if font_path.exists():
+MACOS_FONT_CANDIDATES = [
+    Path("/System/Library/Fonts/PingFang.ttc"),
+    Path("/System/Library/Fonts/Hiragino Sans GB.ttc"),
+    Path("/Library/Fonts/Arial Unicode.ttf"),
+]
+
+UI_SCALE_OVERRIDE_ENV = "FOC_HOST_UI_SCALE"
+FONT_OVERRIDE_ENV = "FOC_HOST_FONT"
+
+
+def _run_text_command(args: List[str], timeout: float = 1.5) -> Optional[str]:
+    if not args or shutil.which(args[0]) is None:
+        return None
+
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    output = result.stdout.strip()
+    return output or None
+
+
+def _parse_last_float(raw: Optional[str]) -> Optional[float]:
+    if not raw:
+        return None
+
+    matches = re.findall(r"\d+(?:\.\d+)?", raw)
+    if not matches:
+        return None
+
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def _sanitize_scale(scale: float) -> float:
+    return max(0.75, min(scale, 4.0))
+
+
+def _detect_fontconfig_cjk_font() -> Optional[Path]:
+    for pattern in (
+        "sans-serif:lang=zh-cn:style=Regular",
+        "sans:lang=zh-cn:style=Regular",
+        "sans-serif:lang=zh-cn",
+        "sans:lang=zh-cn",
+    ):
+        output = _run_text_command(["fc-match", "-f", "%{file}\n", pattern])
+        if not output:
+            continue
+
+        font_path = Path(output.splitlines()[0]).expanduser()
+        if font_path.exists() and font_path.is_file():
             return font_path
+    return None
+
+
+def _detect_scale_from_gsettings() -> Optional[tuple[float, str]]:
+    scale_raw = _run_text_command(
+        ["gsettings", "get", "org.gnome.desktop.interface", "scaling-factor"]
+    )
+    text_scale_raw = _run_text_command(
+        ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"]
+    )
+
+    scale = _parse_last_float(scale_raw) or 1.0
+    text_scale = _parse_last_float(text_scale_raw) or 1.0
+    detected = scale * text_scale
+    if detected <= 0.0:
+        return None
+
+    return _sanitize_scale(detected), f"gsettings({detected:.2f}x)"
+
+
+def _detect_scale_from_tk() -> Optional[tuple[float, str]]:
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return None
+
+    try:
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.withdraw()
+        dpi = float(root.winfo_fpixels("1i"))
+        root.destroy()
+    except Exception:
+        return None
+
+    if dpi <= 0.0:
+        return None
+
+    scale = dpi / 96.0
+    return _sanitize_scale(scale), f"Tk DPI({dpi:.1f})"
+
+
+def detect_ui_scale(override: Optional[float] = None) -> tuple[float, str]:
+    if override is not None and override > 0.0:
+        scale = _sanitize_scale(float(override))
+        return scale, f"命令行指定缩放 {scale:.2f}x"
+
+    override_env = _parse_last_float(os.environ.get(UI_SCALE_OVERRIDE_ENV))
+    if override_env is not None and override_env > 0.0:
+        scale = _sanitize_scale(override_env)
+        return scale, f"{UI_SCALE_OVERRIDE_ENV}={scale:.2f}"
+
+    qt_scale = _parse_last_float(os.environ.get("QT_SCALE_FACTOR"))
+    if qt_scale is not None and qt_scale > 0.0:
+        scale = _sanitize_scale(qt_scale)
+        return scale, f"QT_SCALE_FACTOR={scale:.2f}"
+
+    gdk_scale = _parse_last_float(os.environ.get("GDK_SCALE"))
+    gdk_dpi_scale = _parse_last_float(os.environ.get("GDK_DPI_SCALE"))
+    if gdk_scale is not None or gdk_dpi_scale is not None:
+        scale = (gdk_scale or 1.0) * (gdk_dpi_scale or 1.0)
+        scale = _sanitize_scale(scale)
+        return scale, f"GDK scale={scale:.2f}"
+
+    qt_font_dpi = _parse_last_float(os.environ.get("QT_FONT_DPI"))
+    if qt_font_dpi is not None and qt_font_dpi > 0.0:
+        scale = _sanitize_scale(qt_font_dpi / 96.0)
+        return scale, f"QT_FONT_DPI={qt_font_dpi:.1f}"
+
+    if platform.system() == "Linux":
+        gsettings_scale = _detect_scale_from_gsettings()
+        if gsettings_scale is not None:
+            return gsettings_scale
+
+    tk_scale = _detect_scale_from_tk()
+    if tk_scale is not None:
+        return tk_scale
+
+    return 1.0, "默认缩放 1.00x"
+
+
+def find_cjk_font(override: str = "") -> Optional[Path]:
+    candidates: List[Path] = []
+    if override:
+        candidates.append(Path(override).expanduser())
+
+    font_override = os.environ.get(FONT_OVERRIDE_ENV)
+    if font_override:
+        candidates.append(Path(font_override).expanduser())
+
+    system = platform.system()
+    if system == "Windows":
+        candidates.extend(WINDOWS_FONT_CANDIDATES)
+    elif system == "Darwin":
+        candidates.extend(MACOS_FONT_CANDIDATES)
+    else:
+        fontconfig_font = _detect_fontconfig_cjk_font()
+        if fontconfig_font is not None:
+            candidates.append(fontconfig_font)
+        candidates.extend(LINUX_FONT_CANDIDATES)
+
+    seen: set[Path] = set()
+    for font_path in candidates:
+        normalized = font_path.expanduser()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if normalized.exists() and normalized.is_file():
+            return normalized
     return None
 
 
@@ -201,11 +389,20 @@ class AppConfig:
 
 
 class FOCGuiApp:
-    def __init__(self, initial_port: str = "", initial_baudrate: int = DEFAULT_BAUDRATE) -> None:
+    def __init__(
+        self,
+        initial_port: str = "",
+        initial_baudrate: int = DEFAULT_BAUDRATE,
+        ui_scale_override: Optional[float] = None,
+        font_override: str = "",
+    ) -> None:
         self.config = AppConfig()
         self.state = TelemetryState()
         self.initial_port = initial_port
         self.initial_baudrate = initial_baudrate
+        self.ui_scale, scale_source = detect_ui_scale(ui_scale_override)
+        self.scale_status = f"UI 缩放: {self.ui_scale:.2f}x ({scale_source})"
+        self.font_override = font_override
         self.service = ProtocolService()
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
         self.pending_commands: Deque[QueuedCommand] = deque()
@@ -266,13 +463,14 @@ class FOCGuiApp:
         dpg.set_primary_window("main_window", True)
         self.refresh_ports(select_port=self.initial_port)
         dpg.set_value(self.tags["baud_input"], int(self.initial_baudrate))
+        self._append_log("SYS", self.scale_status)
         self._append_log("SYS", self.font_status)
         dpg.create_viewport(
             title="FOC Controller Host",
-            width=1560,
-            height=960,
-            min_width=1260,
-            min_height=820,
+            width=self._px(1560),
+            height=self._px(960),
+            min_width=self._px(1260),
+            min_height=self._px(820),
         )
         dpg.setup_dearpygui()
         dpg.show_viewport()
@@ -288,33 +486,58 @@ class FOCGuiApp:
         self.disconnect()
         dpg.destroy_context()
 
+    def _px(self, value: int | float) -> int:
+        if value < 0:
+            return int(value)
+        return max(1, int(round(float(value) * self.ui_scale)))
+
+    def _scaled(self, value: int | float) -> float:
+        return float(value) * self.ui_scale
+
     def _setup_fonts(self) -> None:
-        font_path = find_cjk_font()
+        font_path = find_cjk_font(self.font_override)
         if font_path is None:
-            self.font_status = "未找到系统中文字体，界面可能出现乱码"
+            self.font_status = (
+                "未找到系统中文字体，界面可能出现乱码"
+                f"；可用 --font-file 或 {FONT_OVERRIDE_ENV} 指定字体文件"
+            )
             return
 
         with dpg.font_registry():
-            with dpg.font(str(font_path), 18) as default_font:
+            with dpg.font(str(font_path), self._px(18)) as default_font:
                 dpg.add_font_range_hint(dpg.mvFontRangeHint_Default)
-                dpg.add_font_range(0x0020, 0x00FF)
+                dpg.add_font_range_hint(dpg.mvFontRangeHint_Chinese_Full)
                 dpg.add_font_range(0x2000, 0x206F)
-                dpg.add_font_range(0x3000, 0x30FF)
-                dpg.add_font_range(0x4E00, 0x9FFF)
                 dpg.add_font_range(0xFF00, 0xFFEF)
         dpg.bind_font(default_font)
-        self.font_status = f"已加载中文字体: {font_path.name}"
+        self.font_status = f"已加载中文字体: {font_path}"
 
     def _build_theme(self) -> None:
         with dpg.theme() as global_theme:
             with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 12, 12)
-                dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 10, 6)
-                dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 10, 10)
-                dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 8, 6)
-                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 10)
-                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 8)
-                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 10)
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_WindowPadding,
+                    self._scaled(12),
+                    self._scaled(12),
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_FramePadding,
+                    self._scaled(10),
+                    self._scaled(6),
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_ItemSpacing,
+                    self._scaled(10),
+                    self._scaled(10),
+                )
+                dpg.add_theme_style(
+                    dpg.mvStyleVar_CellPadding,
+                    self._scaled(8),
+                    self._scaled(6),
+                )
+                dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, self._scaled(10))
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, self._scaled(8))
+                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, self._scaled(10))
                 dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (20, 25, 32, 255))
                 dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (28, 35, 44, 255))
                 dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (28, 35, 44, 255))
@@ -339,24 +562,29 @@ class FOCGuiApp:
             no_close=True,
         ):
             with dpg.group(horizontal=True):
-                with dpg.child_window(width=500, autosize_y=True, border=False):
+                with dpg.child_window(width=self._px(500), autosize_y=True, border=False):
                     self._build_connection_panel()
-                    dpg.add_spacer(height=6)
+                    dpg.add_spacer(height=self._px(6))
                     self._build_command_panel()
-                    dpg.add_spacer(height=6)
+                    dpg.add_spacer(height=self._px(6))
                     self._build_live_panel()
                 with dpg.child_window(width=-1, autosize_y=True, border=False):
                     self._build_snapshot_panel()
-                    dpg.add_spacer(height=6)
+                    dpg.add_spacer(height=self._px(6))
                     self._build_plot_panel()
-                    dpg.add_spacer(height=6)
+                    dpg.add_spacer(height=self._px(6))
                     self._build_log_panel()
 
     def _build_connection_panel(self) -> None:
         with dpg.collapsing_header(label="串口连接", default_open=True):
             dpg.add_text("RS485 会话")
             with dpg.group(horizontal=True):
-                dpg.add_combo(items=[], width=200, tag=self.tags["port_combo"], no_arrow_button=False)
+                dpg.add_combo(
+                    items=[],
+                    width=self._px(200),
+                    tag=self.tags["port_combo"],
+                    no_arrow_button=False,
+                )
                 dpg.add_button(label="刷新串口", callback=lambda: self.refresh_ports())
             dpg.add_input_int(
                 label="波特率",
@@ -365,7 +593,7 @@ class FOCGuiApp:
                 step=100000,
                 min_value=9600,
                 min_clamped=True,
-                width=200,
+                width=self._px(200),
             )
             with dpg.group(horizontal=True):
                 dpg.add_button(label="连接", tag=self.tags["connect_button"], callback=lambda: self.connect())
@@ -377,7 +605,7 @@ class FOCGuiApp:
                     label="Hz",
                     tag=self.tags["poll_hz"],
                     default_value=DEFAULT_POLL_HZ,
-                    width=120,
+                    width=self._px(120),
                     format="%.2f",
                 )
             with dpg.group(horizontal=True):
@@ -386,7 +614,7 @@ class FOCGuiApp:
                     label="Hz ",
                     tag=self.tags["calib_poll_hz"],
                     default_value=DEFAULT_CALIB_POLL_HZ,
-                    width=120,
+                    width=self._px(120),
                     format="%.2f",
                 )
 
@@ -400,7 +628,7 @@ class FOCGuiApp:
                 max_value=255,
                 min_clamped=True,
                 max_clamped=True,
-                width=200,
+                width=self._px(200),
             )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(label="自动序列号", tag=self.tags["auto_seq"], default_value=True)
@@ -412,7 +640,7 @@ class FOCGuiApp:
                     max_value=255,
                     min_clamped=True,
                     max_clamped=True,
-                    width=120,
+                    width=self._px(120),
                 )
 
             with dpg.tab_bar():
@@ -422,27 +650,27 @@ class FOCGuiApp:
                         default_value=self.config.control_modes[0].label,
                         label="控制模式",
                         tag=self.tags["control_mode"],
-                        width=240,
+                        width=self._px(240),
                     )
                     dpg.add_input_float(
                         label="目标值",
                         tag=self.tags["control_target"],
                         default_value=0.0,
-                        width=240,
+                        width=self._px(240),
                         format="%.6f",
                     )
                     dpg.add_input_float(
                         label="前馈 0",
                         tag=self.tags["control_ff0"],
                         default_value=0.0,
-                        width=240,
+                        width=self._px(240),
                         format="%.6f",
                     )
                     dpg.add_input_float(
                         label="前馈 1",
                         tag=self.tags["control_ff1"],
                         default_value=0.0,
-                        width=240,
+                        width=self._px(240),
                         format="%.6f",
                     )
                     with dpg.group(horizontal=True):
@@ -459,7 +687,7 @@ class FOCGuiApp:
                         default_value=self.config.param_defs[0].label,
                         label="读取参数",
                         tag=self.tags["query_param_choice"],
-                        width=240,
+                        width=self._px(240),
                     )
                     dpg.add_button(label="读取选中参数", callback=lambda: self.send_param_query())
 
@@ -469,19 +697,22 @@ class FOCGuiApp:
                         default_value=self.config.param_defs[0].label,
                         label="参数项",
                         tag=self.tags["write_param_choice"],
-                        width=240,
+                        width=self._px(240),
                     )
                     dpg.add_input_float(
                         label="参数值",
                         tag=self.tags["write_param_value"],
                         default_value=0.0,
-                        width=240,
+                        width=self._px(240),
                         format="%.6f",
                     )
                     dpg.add_button(label="写入参数", callback=lambda: self.send_param_write())
 
                 with dpg.tab(label="校准"):
-                    dpg.add_text("收到 ACK 后固件会后台执行校准，进度请看校准状态回复。", wrap=420)
+                    dpg.add_text(
+                        "收到 ACK 后固件会后台执行校准，进度请看校准状态回复。",
+                        wrap=self._px(420),
+                    )
                     with dpg.group(horizontal=True):
                         dpg.add_button(label="开始自动校准", callback=lambda: self.send_calibration_start())
                         dpg.add_button(label="刷新校准状态", callback=lambda: self.send_calibration_query())
@@ -493,7 +724,7 @@ class FOCGuiApp:
                         tag=self.tags["raw_hex"],
                         multiline=True,
                         width=-1,
-                        height=140,
+                        height=self._px(140),
                         hint="例如: 13 45 01 01 00 01 12",
                     )
                     dpg.add_button(label="发送原始帧", callback=lambda: self.send_raw_command())
@@ -527,7 +758,7 @@ class FOCGuiApp:
                 multiline=True,
                 readonly=True,
                 width=-1,
-                height=260,
+                height=self._px(260),
                 default_value="等待参数快照...",
             )
 
@@ -545,17 +776,17 @@ class FOCGuiApp:
                 multiline=True,
                 readonly=True,
                 width=-1,
-                height=300,
+                height=self._px(300),
             )
             dpg.add_button(label="清空日志", callback=lambda: self.clear_logs())
 
     def _add_kv_row(self, key: str, value_tag: str, default_value: str) -> None:
         with dpg.table_row():
             dpg.add_text(key)
-            dpg.add_text(default_value, tag=value_tag, wrap=320)
+            dpg.add_text(default_value, tag=value_tag, wrap=self._px(320))
 
     def _create_plot(self, title: str, y_label: str, series_tag: str, y_axis_tag: str) -> None:
-        with dpg.plot(label=title, height=170, width=-1):
+        with dpg.plot(label=title, height=self._px(170), width=-1):
             dpg.add_plot_legend()
             x_axis = dpg.add_plot_axis(dpg.mvXAxis, label="样本")
             y_axis = dpg.add_plot_axis(dpg.mvYAxis, label=y_label, tag=y_axis_tag)
@@ -1003,12 +1234,28 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="启动时默认波特率",
     )
+    parser.add_argument(
+        "--ui-scale",
+        type=float,
+        default=None,
+        help=f"覆盖界面缩放，Linux 高 DPI 环境可手动指定，例如 1.50；也可使用 {UI_SCALE_OVERRIDE_ENV}",
+    )
+    parser.add_argument(
+        "--font-file",
+        default="",
+        help=f"指定中文字体文件路径；也可使用 {FONT_OVERRIDE_ENV}",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    app = FOCGuiApp(initial_port=args.port, initial_baudrate=args.baudrate)
+    app = FOCGuiApp(
+        initial_port=args.port,
+        initial_baudrate=args.baudrate,
+        ui_scale_override=args.ui_scale,
+        font_override=args.font_file,
+    )
     app.run()
 
 
