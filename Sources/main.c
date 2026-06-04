@@ -21,7 +21,7 @@ void main(void)
     ProtocolController_Init();
     CalibrationService_Init();
 
-    Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);          //初始为电机停止
+    Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);          //初始为电机停止
 
     TIMER0_Run(); /* 启动定时器 开始foc控制循环 */
 
@@ -29,9 +29,10 @@ void main(void)
     {
         if (ProtocolController_PumpRx(&request))
         {
+            MOTOR_STATUS=!MOTOR_STATUS;
             ProcessCommand(&request);
+            MOTOR_STATUS=!MOTOR_STATUS;
         }
-
         CalibrationService_Poll();
     }
 }

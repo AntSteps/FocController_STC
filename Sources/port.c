@@ -20,7 +20,7 @@
 
 //<<AICUBE_USER_GLOBAL_DEFINE_BEGIN>>
 // 在此添加用户全局变量定义、用户宏定义以及函数声明  
-#define PORT_RSTFLAG_LVDRSTF_MASK               0x10u
+#define PORT_RSTFLAG_LVDRSTF_MASK               0x00u
 
 volatile unsigned char far PORT_RSTFLAG_REG _at_ 0x7EFE99;
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
@@ -36,8 +36,8 @@ void PORT0_Init(void)
 {
     SetP0nInitLevelHigh(PIN_ALL);       //设置P0初始化电平
     SetP0nQuasiMode(PIN_7 | PIN_2 | PIN_1 | PIN_0); //设置P0.7,P0.3,P0.2,P0.1,P0.0为准双向口模式
-    SetP0nPushPullMode(PIN_3);
-    SetP0nHighZInputMode(PIN_6 | PIN_5 | PIN_4); //设置P0.6,P0.5,P0.4为高阻输入模式
+    SetP0nPushPullMode(PIN_3| PIN_5 | PIN_4);
+    SetP0nHighZInputMode(PIN_6 ); //设置P0.6,P0.5,P0.4为高阻输入模式
 
     DisableP0nPullUp(PIN_ALL);          //关闭P0内部上拉电阻
     DisableP0nPullDown(PIN_ALL);        //关闭P0内部下拉电阻
@@ -157,7 +157,7 @@ uint8_t PORT_IsDriverNFaultActive(void)
 }
 
 uint8_t PORT_IsLowVoltageReset(void)
-{
+{ 
     return ((uint8_t)PORT_RSTFLAG_REG & PORT_RSTFLAG_LVDRSTF_MASK) ? 1u : 0u;
 }
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>

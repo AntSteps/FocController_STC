@@ -8,11 +8,11 @@
 #define PID_PERIOD_COUNT    17
 
 // 开环测试开关：置1后忽略编码器电角度与速度环，直接自增电角度驱动电机旋转
-#define MOTOR_OPEN_LOOP_TEST_ENABLE        1
+#define MOTOR_OPEN_LOOP_TEST_ENABLE        0
 // 开环测试时每个5kHz周期增加的电角度(rad)，可改符号切换转向
 #define MOTOR_OPEN_LOOP_TEST_STEP_RAD      0.010f
 // 开环测试时固定输出的Q轴电压幅值
-#define MOTOR_OPEN_LOOP_TEST_Q_VOLTAGE     0.7f
+#define MOTOR_OPEN_LOOP_TEST_Q_VOLTAGE     0.8f
 #define MOTOR_OPEN_LOOP_TEST_TWO_PI        6.28318530718f
 
 // 控制相关
@@ -21,6 +21,7 @@ static float s_cached_angle = 0.0f;   // 缓存的角度（用于速度计算）
 static float s_q_axis_voltage = 0.0f; // Q轴电压占空比（由速度环计算）
 static uint8_t s_control_mode = MOTOR_CONTROL_MODE_STOP;
 static BOOL s_motor_suspended = FALSE;
+static uint16_t count =0;
 #if MOTOR_OPEN_LOOP_TEST_ENABLE
 static float s_open_loop_elec_angle = 0.0f;
 
@@ -81,6 +82,10 @@ BOOL Motor_IsSuspended(void)
 
 void Motor_Update(void)
 {
+    count++;
+    if (count%1000==0){
+        MOTOR_STATUS=!MOTOR_STATUS;
+    }
 #if MOTOR_OPEN_LOOP_TEST_ENABLE
     s_open_loop_elec_angle = Motor_NormalizeAngle0To2Pi(s_open_loop_elec_angle +
                                                         MOTOR_OPEN_LOOP_TEST_STEP_RAD);

@@ -3,3 +3,5 @@ Listings
 .vscode
 *.uvopt
 *.uvgui.*
+.ccls-cache
+__pycache__

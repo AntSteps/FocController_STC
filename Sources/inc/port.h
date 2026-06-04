@@ -25,6 +25,9 @@ void PORT5_Init(void);
 uint8_t PORT_IsDriverNFaultActive(void);
 uint8_t PORT_IsLowVoltageReset(void);
 
+sbit ENCODER_STATUS = P0^5;
+
+sbit MOTOR_STATUS = P0^4;
 
 
 //<<AICUBE_USER_EXTERNAL_DECLARE_BEGIN>>
