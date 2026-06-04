@@ -1,0 +1,8 @@
+# Force CRLF line endings for all text files
+* text=auto eol=crlf
+
+*.c text eol=crlf
+*.h text eol=crlf
+*.py text eol=crlf
+*.txt text eol=crlf
+*.md text eol=crlf
