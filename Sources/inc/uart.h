@@ -10,6 +10,8 @@
 uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len);
 uint8_t xdata *UART_GetRxBuffer(uint8_t *len);
 void UART_ReleaseRxBuffer(void);
+uint8_t UART3_TryLockTx(void);
+uint8_t UART3_WaitLockTx(void);
 //<<AICUBE_USER_DEFINE_END>>
 
 

@@ -32,7 +32,7 @@ uint8_t xdata pu8UR3DMATxBuffer[UART3_TX_DMA_BUFFER_SIZE]; // 串口3DMA发送�
 #define UART3_VECTOR 17
 #endif
 
-static uint8_t UART3_TryLockTx(void)
+uint8_t UART3_TryLockTx(void)
 {
     uint8_t ea_state;
 
@@ -49,7 +49,7 @@ static uint8_t UART3_TryLockTx(void)
     return 1;
 }
 
-static uint8_t UART3_WaitLockTx(void)
+uint8_t UART3_WaitLockTx(void)
 {
     uint16_t wait_us;
 

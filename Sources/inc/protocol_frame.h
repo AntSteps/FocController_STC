@@ -31,6 +31,7 @@
 
 #define PROTOCOL_CTRL_MODE_STOP                 0x00u
 #define PROTOCOL_CTRL_MODE_SPEED                0x01u
+#define PROTOCOL_CTRL_MODE_DEBUG                0xFFu
 
 #define PROTOCOL_PARAM_ID_SPEED_KP              0x01u
 #define PROTOCOL_PARAM_ID_SPEED_KI              0x02u

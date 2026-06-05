@@ -8,23 +8,33 @@
 #include "command.h"
 #include "calibration_service.h"
 #include "motor.h"
+#include "debug.h"
 
 void main(void)
 {
+#if !DEBUG_MODE_ENABLE
     ProtocolRequest request;
+#endif
 
     SYS_Init();
     TIMER0_Stop();
 
     ParamStorage_Init();
     ParamRegistry_ApplyAllRuntime();
+
+#if DEBUG_MODE_ENABLE
+    Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);
+    TIMER0_Run();
+    Debug_Init();
+    while (1)
+    {
+        Debug_Poll();
+    }
+#else
     ProtocolController_Init();
     CalibrationService_Init();
-
-    Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);          //初始为电机停止
-
-    TIMER0_Run(); /* 启动定时器 开始foc控制循环 */
-
+    Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
+    TIMER0_Run();
     while (1)
     {
         if (ProtocolController_PumpRx(&request))
@@ -35,6 +45,7 @@ void main(void)
         }
         CalibrationService_Poll();
     }
+#endif
 }
 
 ////////////////////////////////////////

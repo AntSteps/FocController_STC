@@ -369,6 +369,11 @@
               <FileType>1</FileType>
               <FilePath>.\Sources\motor.c</FilePath>
             </File>
+            <File>
+              <FileName>debug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Sources\debug.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
