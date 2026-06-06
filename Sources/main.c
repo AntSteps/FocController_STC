@@ -76,7 +76,7 @@ void SYS_Init(void)
     ADC_Init();    // ADC初始化
     SPI_Init();    // SPI初始化
     PWMA_Init();   /* 高级PWMA初始化 */
-    Motor_PowerOn_SelfTest();
+    // Motor_PowerOn_SelfTest();
     MATHLIB_Init(); /* MATH库初始化 */
     SVPWM_Init();   /* SVPWM初始化 */
     IAP_Init();

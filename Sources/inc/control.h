@@ -7,6 +7,9 @@
  * 电机控制库 - 包含速度环、滤波器、前馈
  *=========================================*/
 
+/* 速度观测器选择：0=角度差分+LPF，1=PLL */
+#define SPEED_OBSERVER_METHOD   0
+
 /*------------------------------------------
  * 一阶低通滤波器
  *------------------------------------------*/
@@ -25,12 +28,15 @@ float LPF_Update(LowPassFilter_t *lpf, float input);
 
 
 /*------------------------------------------
- * PI 控制器（带抗积分饱和）
+ * 二自由度 PI 控制器（带抗积分饱和）
+ * 比例项使用 β*ref - feedback，积分项使用 ref - feedback
+ * beta=1 时退化为标准PI
  *------------------------------------------*/
 typedef struct {
     // 参数
     float kp;           // 比例系数
     float ki;           // 积分系数
+    float beta;         // 二自由度系数 (0~1)，1为标准PI
     float out_max;      // 输出上限
     float out_min;      // 输出下限
 
@@ -39,12 +45,42 @@ typedef struct {
     float output;       // 上次输出
 } PI_Controller_t;
 
-// 初始化PI控制器
-void PI_Init(PI_Controller_t *pi, float kp, float ki, float out_max, float out_min);
+// 初始化PI控制器（beta: 二自由度系数，1为标准PI）
+void PI_Init(PI_Controller_t *pi, float kp, float ki, float beta, float out_max, float out_min);
 // 重置PI控制器（清除积分）
 void PI_Reset(PI_Controller_t *pi);
-// 更新PI控制器，返回输出
-float PI_Update(PI_Controller_t *pi, float error);
+// 更新PI控制器，传入参考值和反馈值，返回输出
+float PI_Update(PI_Controller_t *pi, float ref, float feedback);
+
+
+/*------------------------------------------
+ * PLL速度观测器
+ * 相位检测器 → PI环路滤波器 → 积分器
+ * 天然滤波，低速性能好，噪声抑制强
+ *------------------------------------------*/
+typedef struct {
+    /* 参数 */
+    float kp;               /* 环路比例增益 */
+    float ki;               /* 环路积分增益 */
+
+    /* 状态 */
+    float est_angle;        /* 估计角度 */
+    float est_speed;        /* 估计速度（rad/s） */
+    float integral;         /* 积分项（PI环路积分器） */
+
+    /* Tustin历史量 */
+    float prev_angle_err;   /* 上次角度误差 */
+    float prev_speed;       /* 上次估计速度 */
+} PLL_SpeedObserver_t;
+
+// 初始化PLL观测器，bandwidth_hz为环路带宽(Hz)，zeta为阻尼比
+void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta, float initial_angle);
+// 重置PLL观测器
+void PLL_Reset(PLL_SpeedObserver_t *pll, float initial_angle);
+// 更新PLL观测器，传入测量角度(rad)，返回估计速度(rad/s)
+float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_freq_hz);
+// 获取PLL估计速度
+float PLL_GetSpeed(PLL_SpeedObserver_t *pll);
 
 
 /*------------------------------------------
@@ -68,15 +104,21 @@ typedef struct {
     /* PI控制器参数 */
     float kp;                   /* 比例系数 */
     float ki;                   /* 积分系数 */
+    float beta;                 /* 二自由度系数 (0~1)，1为标准PI */
     float out_max;              /* 输出上限 */
     float out_min;              /* 输出下限 */
 
     /* 滤波器参数 */
-    float lpf_time_constant_ms; /* 速度滤波时间常数(ms) */
+    float lpf_time_constant_ms; /* 速度反馈滤波时间常数(ms) */
+    float cmd_lpf_time_constant_ms; /* 命令整形滤波时间常数(ms)，0表示不滤波 */
 
     /* 前馈参数 */
     FeedForward_Params_t ff;
     uint8 enable_feedforward;   /* 前馈使能标志 */
+
+    /* PLL观测器参数 */
+    float pll_bandwidth_hz;     /* PLL环路带宽(Hz) */
+    float pll_zeta;             /* PLL阻尼比 */
 
     /* 系统参数 */
     float sample_freq_hz;       /* 速度环采样频率(Hz) */
@@ -90,18 +132,24 @@ typedef struct {
     /* 子模块 */
     PI_Controller_t pi;
     LowPassFilter_t speed_lpf;
+    LowPassFilter_t cmd_lpf;    /* 命令整形滤波器 */
 
     /* 配置参数（指针引用，生命周期由调用者保证） */
     SpeedController_Params_t *params;
 
     /* 运行状态 */
-    float target_speed;         /* 目标速度 */
+    float target_speed;         /* 目标速度（命令整形后） */
+    float raw_target_speed;     /* 原始目标速度（整形前） */
     float filtered_speed;       /* 滤波后速度 */
     float last_angle;           /* 上次角度（用于差分） */
     uint8 angle_initialized;    /* 角度初始化标志 */
     float pi_output;            /* PI输出 */
     float ff_output;            /* 前馈输出 */
     float total_output;         /* 总输出（PI + 前馈） */
+
+#if SPEED_OBSERVER_METHOD == 1
+    PLL_SpeedObserver_t pll;    /* PLL速度观测器 */
+#endif
 } SpeedController_t;
 
 /* 全局速度环控制器（单例） */

@@ -62,6 +62,7 @@ except ImportError as exc:  # pragma: no cover
 
 MAX_LOG_LINES = 300
 DEFAULT_HISTORY_LENGTH = 500
+PAN_THRESHOLD = 100  # 数据量超过此值后 X 轴开始平移滚动
 
 WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/msyh.ttc"),
@@ -326,6 +327,10 @@ class AppConfig:
             ChoiceOption(0x18, "加速度前馈"),
             ChoiceOption(0x19, "摩擦补偿"),
             ChoiceOption(0x1A, "速度环采样频率"),
+            ChoiceOption(0x1B, "二自由度系数"),
+            ChoiceOption(0x1C, "命令滤波常数"),
+            ChoiceOption(0x1D, "PLL带宽"),
+            ChoiceOption(0x1E, "PLL阻尼比"),
             ChoiceOption(0x20, "编码器偏移"),
             ChoiceOption(0x30, "校准极对数"),
             ChoiceOption(0x31, "校准方向"),
@@ -407,6 +412,9 @@ class FOCGuiApp:
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
         self.pending_commands: Deque[QueuedCommand] = deque()
         self.plot_dirty = False
+        self.plot_paused = False
+        self._cached_x: List[float] = []
+        self._cached_x_len: int = 0
         self.font_status = "未加载中文字体"
         self.next_state_poll_at = 0.0
         self.next_calib_poll_at = 0.0
@@ -453,6 +461,10 @@ class FOCGuiApp:
             "output_series": "output_series",
             "position_series": "position_series",
             "voltage_series": "voltage_series",
+            "pause_plots": "pause_plots",
+            "vel_x_axis": "vel_x_axis",
+            "pos_x_axis": "pos_x_axis",
+            "vol_x_axis": "vol_x_axis",
         }
 
     def run(self) -> None:
@@ -764,10 +776,31 @@ class FOCGuiApp:
 
     def _build_plot_panel(self) -> None:
         with dpg.collapsing_header(label="实时曲线", default_open=True):
-            self._create_plot("速度", "rad/s", self.tags["velocity_series"], "velocity_y_axis")
-            self._create_plot("输出占空比", "duty", self.tags["output_series"], "output_y_axis")
-            self._create_plot("位置", "rad", self.tags["position_series"], "position_y_axis")
-            self._create_plot("母线电压", "V", self.tags["voltage_series"], "voltage_y_axis")
+            dpg.add_checkbox(
+                label="暂停绘图",
+                tag=self.tags["pause_plots"],
+                default_value=False,
+                callback=lambda s, v: setattr(self, "plot_paused", v),
+            )
+            self._create_dual_plot(
+                "速度环跟踪",
+                "速度 (rad/s)",
+                "输出 (duty)",
+                self.tags["velocity_series"],
+                self.tags["output_series"],
+                "vel_y_axis",
+                "out_y_axis",
+                x_axis_tag=self.tags["vel_x_axis"],
+                height=260,
+            )
+            self._create_plot(
+                "位置", "rad", self.tags["position_series"], "position_y_axis",
+                x_axis_tag=self.tags["pos_x_axis"], height=150,
+            )
+            self._create_plot(
+                "母线电压", "V", self.tags["voltage_series"], "voltage_y_axis",
+                x_axis_tag=self.tags["vol_x_axis"], height=130,
+            )
 
     def _build_log_panel(self) -> None:
         with dpg.collapsing_header(label="通信日志", default_open=True):
@@ -785,14 +818,47 @@ class FOCGuiApp:
             dpg.add_text(key)
             dpg.add_text(default_value, tag=value_tag, wrap=self._px(320))
 
-    def _create_plot(self, title: str, y_label: str, series_tag: str, y_axis_tag: str) -> None:
-        with dpg.plot(label=title, height=self._px(170), width=-1):
+    def _create_plot(
+        self,
+        title: str,
+        y_label: str,
+        series_tag: str,
+        y_axis_tag: str,
+        x_axis_tag: str = "",
+        height: int = 150,
+    ) -> None:
+        with dpg.plot(
+            label=title, height=self._px(height), width=-1, anti_aliased=True, crosshairs=True
+        ):
             dpg.add_plot_legend()
-            x_axis = dpg.add_plot_axis(dpg.mvXAxis, label="样本")
+            x_axis = dpg.add_plot_axis(dpg.mvXAxis, label="时间 (s)", tag=x_axis_tag or 0)
             y_axis = dpg.add_plot_axis(dpg.mvYAxis, label=y_label, tag=y_axis_tag)
             dpg.add_line_series([], [], label=title, parent=y_axis, tag=series_tag)
-            dpg.set_axis_limits_auto(x_axis)
             dpg.set_axis_limits_auto(y_axis)
+
+    def _create_dual_plot(
+        self,
+        title: str,
+        y1_label: str,
+        y2_label: str,
+        tag1: str,
+        tag2: str,
+        axis1_tag: str,
+        axis2_tag: str,
+        x_axis_tag: str = "",
+        height: int = 260,
+    ) -> None:
+        with dpg.plot(
+            label=title, height=self._px(height), width=-1, anti_aliased=True, crosshairs=True
+        ):
+            dpg.add_plot_legend()
+            x_axis = dpg.add_plot_axis(dpg.mvXAxis, label="时间 (s)", tag=x_axis_tag or 0)
+            y1_axis = dpg.add_plot_axis(dpg.mvYAxis, label=y1_label, tag=axis1_tag)
+            dpg.add_line_series([], [], label=y1_label, parent=y1_axis, tag=tag1)
+            y2_axis = dpg.add_plot_axis(dpg.mvYAxis2, label=y2_label, tag=axis2_tag)
+            dpg.add_line_series([], [], label=y2_label, parent=y2_axis, tag=tag2)
+            dpg.set_axis_limits_auto(y1_axis)
+            dpg.set_axis_limits_auto(y2_axis)
 
     def refresh_ports(self, select_port: str = "") -> None:
         ports = list_serial_ports()
@@ -1207,6 +1273,24 @@ class FOCGuiApp:
             dpg.set_value(self.tags["snapshot_text"], "\n".join(lines))
 
     def _update_plots(self) -> None:
+        if self.plot_paused:
+            return
+        n = len(self.state.histories["velocity"])
+        if n != self._cached_x_len:
+            hz = max(0.2, float(dpg.get_value(self.tags["poll_hz"])))
+            dt = 1.0 / hz
+            self._cached_x = [i * dt for i in range(n)]
+            self._cached_x_len = n
+        x = self._cached_x[:n]
+
+        # X 轴平移逻辑：数据量超过阈值后只显示最近 PAN_THRESHOLD 个点
+        if n > PAN_THRESHOLD:
+            x_min = x[n - PAN_THRESHOLD]
+            x_max = x[-1]
+        else:
+            x_min = 0.0
+            x_max = x[-1] if x else 1.0
+
         for key, series_tag in (
             ("velocity", self.tags["velocity_series"]),
             ("output", self.tags["output_series"]),
@@ -1214,8 +1298,11 @@ class FOCGuiApp:
             ("voltage", self.tags["voltage_series"]),
         ):
             values = list(self.state.histories[key])
-            samples = list(range(len(values)))
-            dpg.set_value(series_tag, [samples, values])
+            dpg.set_value(series_tag, [x[: len(values)], values])
+
+        # 更新各图 X 轴范围
+        for x_axis_tag in (self.tags["vel_x_axis"], self.tags["pos_x_axis"], self.tags["vol_x_axis"]):
+            dpg.set_axis_limits(x_axis_tag, x_min, x_max)
 
     def _append_log(self, level: str, message: str) -> None:
         now = time.time()

@@ -3,9 +3,11 @@
 #include "calibration.h"
 #include "svpwm.h"
 #include "control.h"
+#include "adc.h"
 
 // PID执行周期计数（5kHz / 300Hz ≈ 16.67，取17）
 #define PID_PERIOD_COUNT    17
+#define VBUS_NOMINAL        8.5f  // 标称母线电压(V)
 
 // 开环测试开关：置1后忽略编码器电角度与速度环，直接自增电角度驱动电机旋转
 #define MOTOR_OPEN_LOOP_TEST_ENABLE        0
@@ -109,7 +111,9 @@ void Motor_Update(void)
             if (++s_pid_counter >= PID_PERIOD_COUNT)
             {
                 s_pid_counter = 0u;
-                s_q_axis_voltage = SpeedController_Update(s_cached_angle);
+                // 结合当前adc采样 对占空比进行缩放
+                s_q_axis_voltage = SpeedController_Update(s_cached_angle) * (VBUS_NOMINAL / ADC_GetBusVoltage());
+
             }
         }
         else

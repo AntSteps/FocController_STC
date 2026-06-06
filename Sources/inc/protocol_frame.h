@@ -50,6 +50,10 @@
 #define PROTOCOL_PARAM_ID_FF_ACCEL_GAIN         0x18u
 #define PROTOCOL_PARAM_ID_FF_FRICTION           0x19u
 #define PROTOCOL_PARAM_ID_SPEED_SAMPLE_FREQ     0x1Au
+#define PROTOCOL_PARAM_ID_SPEED_BETA            0x1Bu  /* 二自由度系数 (0~1) */
+#define PROTOCOL_PARAM_ID_SPEED_CMD_LPF_MS      0x1Cu  /* 命令整形滤波时间常数(ms) */
+#define PROTOCOL_PARAM_ID_PLL_BANDWIDTH_HZ      0x1Du  /* PLL环路带宽(Hz) */
+#define PROTOCOL_PARAM_ID_PLL_ZETA              0x1Eu  /* PLL阻尼比 */
 #define PROTOCOL_PARAM_ID_ENCODER_OFFSET        0x20u
 #define PROTOCOL_PARAM_ID_CALIB_POLE_PAIRS      0x30u
 #define PROTOCOL_PARAM_ID_CALIB_DIR             0x31u
@@ -208,6 +212,10 @@ typedef struct
     float ff_friction_compensation;
     uint8_t ff_enable;
     float speed_sample_freq_hz;
+    float speed_beta;               /* 二自由度系数 */
+    float speed_cmd_lpf_ms;         /* 命令整形滤波时间常数(ms) */
+    float pll_bandwidth_hz;         /* PLL环路带宽(Hz) */
+    float pll_zeta;                 /* PLL阻尼比 */
     float current_limit;
     float velocity_limit;
     int16_t encoder_offset;
