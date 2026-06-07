@@ -8,7 +8,7 @@
  *=========================================*/
 
 /* 速度观测器选择：0=角度差分+LPF，1=PLL */
-#define SPEED_OBSERVER_METHOD   0
+#define SPEED_OBSERVER_METHOD   1
 
 /*------------------------------------------
  * 一阶低通滤波器
@@ -77,7 +77,7 @@ typedef struct {
 void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta, float initial_angle);
 // 重置PLL观测器
 void PLL_Reset(PLL_SpeedObserver_t *pll, float initial_angle);
-// 更新PLL观测器，传入测量角度(rad)，返回估计速度(rad/s)
+// 更新PLL观测器，传入测量机械角度(rad)，返回估计速度(rad/s)
 float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_freq_hz);
 // 获取PLL估计速度
 float PLL_GetSpeed(PLL_SpeedObserver_t *pll);

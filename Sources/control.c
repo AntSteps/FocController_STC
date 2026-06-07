@@ -8,6 +8,17 @@
  *=========================================*/
 SpeedController_t g_speed_ctrl;
 
+static float NormalizeAnglePi(float angle)
+{
+    while (angle > PI) {
+        angle -= TWO_PI;
+    }
+    while (angle < -PI) {
+        angle += TWO_PI;
+    }
+    return angle;
+}
+
 
 /*==========================================
  * 低通滤波器实现
@@ -144,23 +155,11 @@ void PLL_Reset(PLL_SpeedObserver_t *pll, float initial_angle)
 
 float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_freq_hz)
 {
-    float angle_err, dt_half;
+    float angle_err;
+    float dt_half;
 
-    /* 将测量角度归一化到 [0, 2PI]，与 est_angle 范围一致 */
-    if (measured_angle < 0.0f) {
-        measured_angle += TWO_PI;
-    }
-
-    /* 相位检测器：测量角度与估计角度之差 */
-    angle_err = measured_angle - pll->est_angle;
-
-    /* 角度误差归一化到 [-PI, PI] */
-    if (angle_err > PI) {
-        angle_err -= TWO_PI;
-    } else if (angle_err < -PI) {
-        angle_err += TWO_PI;
-    }
-
+    /* 相位检测器：测量角度与估计角度的闭环误差 */
+    angle_err = NormalizeAnglePi(measured_angle - pll->est_angle);
     dt_half = 0.5f / sample_freq_hz;
 
     /* PI环路滤波器（Tustin积分）
@@ -177,12 +176,8 @@ float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_fr
     pll->est_angle += (pll->est_speed + pll->prev_speed) * dt_half;
     pll->prev_speed = pll->est_speed;
 
-    /* 角度归一化到 [0, 2PI] */
-    if (pll->est_angle > TWO_PI) {
-        pll->est_angle -= TWO_PI;
-    } else if (pll->est_angle < 0.0f) {
-        pll->est_angle += TWO_PI;
-    }
+
+    pll->est_angle = NormalizeAnglePi(pll->est_angle);
 
     return pll->est_speed;
 }
@@ -210,6 +205,8 @@ void SpeedController_Init(SpeedController_Params_t *params)
     /* 初始化状态 */
     g_speed_ctrl.target_speed = 0.0f;
     g_speed_ctrl.raw_target_speed = 0.0f;
+    g_speed_ctrl.cmd_lpf.output = g_speed_ctrl.target_speed;
+    g_speed_ctrl.cmd_lpf.init_done = 1;
     g_speed_ctrl.filtered_speed = 0.0f;
     g_speed_ctrl.last_angle = 0.0f;
     g_speed_ctrl.angle_initialized = 0;
@@ -226,8 +223,6 @@ void SpeedController_Init(SpeedController_Params_t *params)
 void SpeedController_SetTarget(float target_speed)
 {
     g_speed_ctrl.raw_target_speed = target_speed;
-    /* 命令整形：通过LPF滤波目标速度 */
-    g_speed_ctrl.target_speed = LPF_Update(&g_speed_ctrl.cmd_lpf, target_speed);
 }
 
 float SpeedController_GetTarget(void)
@@ -247,8 +242,6 @@ float SpeedController_GetOutput(void)
 
 float SpeedController_Update(float mechanical_angle)
 {
-    float speed_error;
-
     if (!g_speed_ctrl.angle_initialized) {
         /* 首次运行，记录角度，不计算速度 */
         g_speed_ctrl.last_angle = mechanical_angle;
@@ -259,16 +252,10 @@ float SpeedController_Update(float mechanical_angle)
         return g_speed_ctrl.total_output;  /* 返回上次输出（初始为0） */
     }
 
-#if SPEED_OBSERVER_METHOD == 1
-    // PLL速度观测器
-    g_speed_ctrl.filtered_speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle,
-                                              g_speed_ctrl.params->sample_freq_hz);
-#else
-    // 角度差分+lpf
     {
         float delta_angle, raw_speed;
 
-        /* 计算角度差分（处理跨圈情况） */
+        // /* 计算角度差分（处理跨圈情况） */
         delta_angle = mechanical_angle - g_speed_ctrl.last_angle;
 
         /* 处理角度跳变（2PI 边界） */
@@ -280,16 +267,18 @@ float SpeedController_Update(float mechanical_angle)
 
         g_speed_ctrl.last_angle = mechanical_angle;
 
-        /* 计算原始速度 (rad/s) */
-        raw_speed = delta_angle * g_speed_ctrl.params->sample_freq_hz;
-
         /* 滤波 */
+        #if SPEED_OBSERVER_METHOD == 1
+        // PLL速度观测器
+        g_speed_ctrl.filtered_speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle, g_speed_ctrl.params->sample_freq_hz);
+        #else
+        raw_speed = delta_angle * g_speed_ctrl.params->sample_freq_hz;
         g_speed_ctrl.filtered_speed = LPF_Update(&g_speed_ctrl.speed_lpf, raw_speed);
+        #endif
     }
-#endif
 
-    /* 速度误差（仅用于显示） */
-    speed_error = g_speed_ctrl.target_speed - g_speed_ctrl.filtered_speed;
+    /* 命令整形：每个速度环周期推进一次目标速度滤波 */
+    g_speed_ctrl.target_speed = LPF_Update(&g_speed_ctrl.cmd_lpf, g_speed_ctrl.raw_target_speed);
 
     /* PI 计算（二自由度：比例项使用 β*ref - feedback，积分项使用 ref - feedback） */
     g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi, g_speed_ctrl.target_speed, g_speed_ctrl.filtered_speed);
@@ -323,6 +312,8 @@ void SpeedController_Reset(void)
     g_speed_ctrl.pi_output = 0.0f;
     g_speed_ctrl.ff_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+    g_speed_ctrl.cmd_lpf.output = g_speed_ctrl.target_speed;
+    g_speed_ctrl.cmd_lpf.init_done = 1;
 
 #if SPEED_OBSERVER_METHOD == 1
     PLL_Reset(&g_speed_ctrl.pll, 0.0f);
@@ -331,12 +322,16 @@ void SpeedController_Reset(void)
 
 void SpeedController_RefreshParams(SpeedController_Params_t *params)
 {
-    float target_speed;
+    float raw_target_speed;
+    float shaped_target_speed;
 
-    target_speed = g_speed_ctrl.raw_target_speed;
+    raw_target_speed = g_speed_ctrl.raw_target_speed;
+    shaped_target_speed = g_speed_ctrl.target_speed;
     SpeedController_Init(params);
-    /* 通过SetTarget重新设置，让cmd_lpf重新初始化 */
-    SpeedController_SetTarget(target_speed);
+    g_speed_ctrl.target_speed = shaped_target_speed;
+    g_speed_ctrl.cmd_lpf.output = shaped_target_speed;
+    g_speed_ctrl.cmd_lpf.init_done = 1;
+    SpeedController_SetTarget(raw_target_speed);
 }
 
 void SpeedController_SetFeedForwardGain(float velocity_gain)
