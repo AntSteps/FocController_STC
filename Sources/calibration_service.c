@@ -8,7 +8,7 @@
 #include <string.h>
 
 #define CALIB_SERVICE_TWO_PI          6.28318530718f
-#define CALIB_SERVICE_VOLTAGE         0.40f
+#define CALIB_SERVICE_VOLTAGE         0.50f
 #define CALIB_SERVICE_STEP_RAD        0.05f
 #define CALIB_SERVICE_STEP_DELAY_MS   10ul
 #define CALIB_SERVICE_LOCK_DELAY_MS   1000ul
