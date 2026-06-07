@@ -118,8 +118,7 @@ BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, Protoc
     case PROTOCOL_REQUEST_CTRL:
         request->control_mode = frame[3];
         request->target = ProtocolFrame_ReadFloatRaw(&frame[4]);
-        request->ff0 = ProtocolFrame_ReadFloatRaw(&frame[8]);
-        request->ff1 = ProtocolFrame_ReadFloatRaw(&frame[12]);
+        request->load_ff = ProtocolFrame_ReadFloatRaw(&frame[8]);
         break;
 
     case PROTOCOL_REQUEST_PARAM_WRITE:

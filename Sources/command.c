@@ -72,6 +72,7 @@ static ProtocolResultCode Command_HandleControl(const ProtocolRequest *request)
 
     case PROTOCOL_CTRL_MODE_SPEED:
         SpeedController_SetTarget(target);
+        SpeedController_SetLoadFF(request->load_ff);
         Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);
         break;
 

@@ -10,6 +10,9 @@
 /* 速度观测器选择：0=角度差分+LPF，1=PLL */
 #define SPEED_OBSERVER_METHOD   1
 
+/* 速度环采样频率 (Hz) */
+#define SPEED_CTRL_SAMPLE_FREQ_HZ   300.0f
+
 /*------------------------------------------
  * 一阶低通滤波器
  *------------------------------------------*/
@@ -84,16 +87,14 @@ float PLL_GetSpeed(PLL_SpeedObserver_t *pll);
 
 
 /*------------------------------------------
- * 前馈控制器接口（预留扩展）
+ * 前馈参数结构体（预留扩展）
  *------------------------------------------*/
 typedef struct {
-    float velocity_gain;        /* 速度前馈增益 */
-    float acceleration_gain;    /* 加速度前馈增益（预留） */
-    float friction_compensation;/* 摩擦补偿（预留） */
+    float acceleration_gain;    /* 加速度前馈增益 */
+    float friction_compensation;/* 摩擦补偿系数 */
+    float R;                    /* 相电阻 (Ohm) */
+    float Ke;                   /* 反电动势系数 (V/(rad/s)) */
 } FeedForward_Params_t;
-
-void FeedForward_Init(FeedForward_Params_t *ff, float velocity_gain);
-float FeedForward_Calculate(FeedForward_Params_t *ff, float target_velocity);
 
 
 /*------------------------------------------
@@ -114,14 +115,10 @@ typedef struct {
 
     /* 前馈参数 */
     FeedForward_Params_t ff;
-    uint8 enable_feedforward;   /* 前馈使能标志 */
 
     /* PLL观测器参数 */
     float pll_bandwidth_hz;     /* PLL环路带宽(Hz) */
     float pll_zeta;             /* PLL阻尼比 */
-
-    /* 系统参数 */
-    float sample_freq_hz;       /* 速度环采样频率(Hz) */
 } SpeedController_Params_t;
 
 
@@ -143,9 +140,17 @@ typedef struct {
     float filtered_speed;       /* 滤波后速度 */
     float last_angle;           /* 上次角度（用于差分） */
     uint8 angle_initialized;    /* 角度初始化标志 */
+
+    /* 电流环各项输出 */
     float pi_output;            /* PI输出 */
-    float ff_output;            /* 前馈输出 */
-    float total_output;         /* 总输出（PI + 前馈） */
+    float accel_ff;             /* 加速度前馈 */
+    float load_ff;              /* 负载前馈（上层提供） */
+    float friction_ff;          /* 摩擦前馈 */
+    float i_output;             /* 总电流参考 = pi + accel_ff + load_ff + friction_ff */
+    float total_output;         /* 电压输出 = i_output * R + Ke * ω */
+
+    /* 加速度计算用 */
+    float prev_target_speed;    /* 上次目标速度（用于差分） */
 
 #if SPEED_OBSERVER_METHOD == 1
     PLL_SpeedObserver_t pll;    /* PLL速度观测器 */
@@ -171,10 +176,8 @@ float SpeedController_Update(float mechanical_angle);
 void SpeedController_Reset(void);
 // 运行时刷新参数，保留目标速度
 void SpeedController_RefreshParams(SpeedController_Params_t *params);
-// 设置前馈增益
-void SpeedController_SetFeedForwardGain(float velocity_gain);
-// 使能/禁用前馈
-void SpeedController_EnableFeedForward(uint8 enable);
+// 设置负载前馈（上层提供）
+void SpeedController_SetLoadFF(float load_ff);
 
 
 #endif /* __CONTROL_H__ */

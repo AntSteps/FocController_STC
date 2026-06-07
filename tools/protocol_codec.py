@@ -55,7 +55,7 @@ STATUS_DRIVER_NFAULT = 0x20
 STATUS_ENC_DATA_GOOD = 0x40
 STATUS_PARAM_FROM_EEPROM = 0x80
 
-CTRL_CMD_FRAME_FORMAT = ">HBBfffBB"
+CTRL_CMD_FRAME_FORMAT = ">HBBffBB"
 PARAM_WRITE_CMD_FRAME_FORMAT = ">HBBfBB"
 QUERY_CMD_FRAME_FORMAT = ">HBBBBB"
 CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
@@ -63,7 +63,7 @@ CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
 ACK_REPLY_FRAME_FORMAT = ">HBBBBB"
 STATE_REPLY_FRAME_FORMAT = ">HBBfffffBBB"
 PARAM_VALUE_REPLY_FRAME_FORMAT = ">HBBfBB"
-PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffBfffhhhfffffBB"
+PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffffhhhffffffBB"
 CALIB_STATUS_REPLY_FRAME_FORMAT = ">HBBBBB"
 
 CTRL_CMD_FRAME_SIZE = struct.calcsize(CTRL_CMD_FRAME_FORMAT)
@@ -195,15 +195,14 @@ def unpack_frame(fmt, data, expected_head, frame_name):
     return values
 
 
-def build_ctrl_cmd_frame(motor_id, ctrl_mode, target, ff0, ff1, seq):
+def build_ctrl_cmd_frame(motor_id, ctrl_mode, target, load_ff, seq):
     return pack_frame(
         CTRL_CMD_FRAME_FORMAT,
         CTRL_CMD_HEAD,
         motor_id & 0xFF,
         ctrl_mode & 0xFF,
         float(target),
-        float(ff0),
-        float(ff1),
+        float(load_ff),
         seq & 0xFF,
         0,
     )
@@ -310,19 +309,19 @@ def decode_param_snapshot_reply(data):
             "motor_pole_pairs": int(values[3]),
             "motor_phase_resistance": float(values[4]),
             "motor_phase_inductance": float(values[5]),
-            "cur_kp": float(values[6]),
-            "cur_ki": float(values[7]),
-            "speed_kp": float(values[8]),
-            "speed_ki": float(values[9]),
-            "speed_out_max": float(values[10]),
-            "speed_out_min": float(values[11]),
-            "speed_lpf_time_constant_ms": float(values[12]),
-            "ff_velocity_gain": float(values[13]),
-            "ff_acceleration_gain": float(values[14]),
-            "ff_friction_compensation": float(values[15]),
-            "ff_enable": int(values[16]),
-            "speed_sample_freq_hz": float(values[17]),
-            "current_limit": float(values[18]),
+            "speed_kp": float(values[6]),
+            "speed_ki": float(values[7]),
+            "speed_out_max": float(values[8]),
+            "speed_out_min": float(values[9]),
+            "speed_lpf_time_constant_ms": float(values[10]),
+            "ff_acceleration_gain": float(values[11]),
+            "ff_friction_compensation": float(values[12]),
+            "speed_beta": float(values[13]),
+            "speed_cmd_lpf_ms": float(values[14]),
+            "pll_bandwidth_hz": float(values[15]),
+            "pll_zeta": float(values[16]),
+            "speed_R": float(values[17]),
+            "speed_Ke": float(values[18]),
             "velocity_limit": float(values[19]),
             "encoder_offset": int(values[20]),
             "calib_pole_pairs": int(values[21]),

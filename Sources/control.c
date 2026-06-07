@@ -112,22 +112,6 @@ float PI_Update(PI_Controller_t *pi, float ref, float feedback)
 
 
 /*==========================================
- * 前馈控制器实现
- *=========================================*/
-void FeedForward_Init(FeedForward_Params_t *ff, float velocity_gain)
-{
-    ff->velocity_gain = velocity_gain;
-    ff->acceleration_gain = 0.0f;
-    ff->friction_compensation = 0.0f;
-}
-
-float FeedForward_Calculate(FeedForward_Params_t *ff, float target_velocity)
-{
-    return ff->velocity_gain * target_velocity;
-}
-
-
-/*==========================================
  * PLL速度观测器实现
  *=========================================*/
 #if SPEED_OBSERVER_METHOD == 1
@@ -199,8 +183,8 @@ void SpeedController_Init(SpeedController_Params_t *params)
 
     /* 初始化子模块 */
     PI_Init(&g_speed_ctrl.pi, params->kp, params->ki, params->beta, params->out_max, params->out_min);
-    LPF_Init(&g_speed_ctrl.speed_lpf, params->lpf_time_constant_ms, params->sample_freq_hz);
-    LPF_Init(&g_speed_ctrl.cmd_lpf, params->cmd_lpf_time_constant_ms, params->sample_freq_hz);
+    LPF_Init(&g_speed_ctrl.speed_lpf, params->lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
+    LPF_Init(&g_speed_ctrl.cmd_lpf, params->cmd_lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
 
     /* 初始化状态 */
     g_speed_ctrl.target_speed = 0.0f;
@@ -211,8 +195,12 @@ void SpeedController_Init(SpeedController_Params_t *params)
     g_speed_ctrl.last_angle = 0.0f;
     g_speed_ctrl.angle_initialized = 0;
     g_speed_ctrl.pi_output = 0.0f;
-    g_speed_ctrl.ff_output = 0.0f;
+    g_speed_ctrl.accel_ff = 0.0f;
+    g_speed_ctrl.load_ff = 0.0f;
+    g_speed_ctrl.friction_ff = 0.0f;
+    g_speed_ctrl.i_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+    g_speed_ctrl.prev_target_speed = 0.0f;
 
 #if SPEED_OBSERVER_METHOD == 1
     /* PLL参数在此设置，角度由首次Update时从编码器读取初始化 */
@@ -253,27 +241,22 @@ float SpeedController_Update(float mechanical_angle)
     }
 
     {
-        float delta_angle, raw_speed;
-
-        // /* 计算角度差分（处理跨圈情况） */
-        delta_angle = mechanical_angle - g_speed_ctrl.last_angle;
-
-        /* 处理角度跳变（2PI 边界） */
-        if (delta_angle > PI) {
-            delta_angle -= TWO_PI;
-        } else if (delta_angle < -PI) {
-            delta_angle += TWO_PI;
-        }
-
-        g_speed_ctrl.last_angle = mechanical_angle;
-
-        /* 滤波 */
         #if SPEED_OBSERVER_METHOD == 1
-        // PLL速度观测器
-        g_speed_ctrl.filtered_speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle, g_speed_ctrl.params->sample_freq_hz);
+        /* PLL速度观测器：直接传入角度，内部完成差分+滤波 */
+        g_speed_ctrl.filtered_speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle, SPEED_CTRL_SAMPLE_FREQ_HZ);
+        g_speed_ctrl.last_angle = mechanical_angle;
         #else
-        raw_speed = delta_angle * g_speed_ctrl.params->sample_freq_hz;
-        g_speed_ctrl.filtered_speed = LPF_Update(&g_speed_ctrl.speed_lpf, raw_speed);
+        {
+            /* 差分测速：计算角度差分（处理跨圈情况） */
+            float delta_angle = mechanical_angle - g_speed_ctrl.last_angle;
+            g_speed_ctrl.last_angle = mechanical_angle;
+            if (delta_angle > PI) {
+                delta_angle -= TWO_PI;
+            } else if (delta_angle < -PI) {
+                delta_angle += TWO_PI;
+            }
+            g_speed_ctrl.filtered_speed = LPF_Update(&g_speed_ctrl.speed_lpf, delta_angle * SPEED_CTRL_SAMPLE_FREQ_HZ);
+        }
         #endif
     }
 
@@ -283,23 +266,30 @@ float SpeedController_Update(float mechanical_angle)
     /* PI 计算（二自由度：比例项使用 β*ref - feedback，积分项使用 ref - feedback） */
     g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi, g_speed_ctrl.target_speed, g_speed_ctrl.filtered_speed);
 
-    /* 前馈计算（如果使能） */
-    if (g_speed_ctrl.params->enable_feedforward) {
-        g_speed_ctrl.ff_output = FeedForward_Calculate(&g_speed_ctrl.params->ff,
-                                                       g_speed_ctrl.target_speed);
+    /* 加速度前馈：对目标速度差分 */
+    g_speed_ctrl.accel_ff = g_speed_ctrl.params->ff.acceleration_gain
+                          * (g_speed_ctrl.target_speed - g_speed_ctrl.prev_target_speed)
+                          * SPEED_CTRL_SAMPLE_FREQ_HZ;
+    g_speed_ctrl.prev_target_speed = g_speed_ctrl.target_speed;
+
+    /* 摩擦前馈：系数 * sign(target_speed) */
+    if (g_speed_ctrl.target_speed > 0.0f) {
+        g_speed_ctrl.friction_ff = g_speed_ctrl.params->ff.friction_compensation;
+    } else if (g_speed_ctrl.target_speed < 0.0f) {
+        g_speed_ctrl.friction_ff = -g_speed_ctrl.params->ff.friction_compensation;
     } else {
-        g_speed_ctrl.ff_output = 0.0f;
+        g_speed_ctrl.friction_ff = 0.0f;
     }
 
-    /* 总输出 = PI输出 + 前馈输出 */
-    g_speed_ctrl.total_output = g_speed_ctrl.pi_output + g_speed_ctrl.ff_output;
+    /* 总电流参考 = PI + 加速度前馈 + 负载前馈 + 摩擦前馈 */
+    g_speed_ctrl.i_output = g_speed_ctrl.pi_output
+                          + g_speed_ctrl.accel_ff
+                          + g_speed_ctrl.load_ff
+                          + g_speed_ctrl.friction_ff;
 
-    /* 最终限幅（确保在安全范围） */
-    if (g_speed_ctrl.total_output > g_speed_ctrl.pi.out_max) {
-        g_speed_ctrl.total_output = g_speed_ctrl.pi.out_max;
-    } else if (g_speed_ctrl.total_output < g_speed_ctrl.pi.out_min) {
-        g_speed_ctrl.total_output = g_speed_ctrl.pi.out_min;
-    }
+    /* 电压输出 = i_output * R + Ke * ω_ref */
+    g_speed_ctrl.total_output = g_speed_ctrl.i_output * g_speed_ctrl.params->ff.R
+                              + g_speed_ctrl.params->ff.Ke * g_speed_ctrl.target_speed;
 
     return g_speed_ctrl.total_output;
 }
@@ -310,8 +300,11 @@ void SpeedController_Reset(void)
     LPF_Reset(&g_speed_ctrl.speed_lpf);
     g_speed_ctrl.angle_initialized = 0;
     g_speed_ctrl.pi_output = 0.0f;
-    g_speed_ctrl.ff_output = 0.0f;
+    g_speed_ctrl.accel_ff = 0.0f;
+    g_speed_ctrl.friction_ff = 0.0f;
+    g_speed_ctrl.i_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+    g_speed_ctrl.prev_target_speed = 0.0f;
     g_speed_ctrl.cmd_lpf.output = g_speed_ctrl.target_speed;
     g_speed_ctrl.cmd_lpf.init_done = 1;
 
@@ -334,12 +327,7 @@ void SpeedController_RefreshParams(SpeedController_Params_t *params)
     SpeedController_SetTarget(raw_target_speed);
 }
 
-void SpeedController_SetFeedForwardGain(float velocity_gain)
+void SpeedController_SetLoadFF(float load_ff)
 {
-    g_speed_ctrl.params->ff.velocity_gain = velocity_gain;
-}
-
-void SpeedController_EnableFeedForward(uint8 enable)
-{
-    g_speed_ctrl.params->enable_feedforward = enable;
+    g_speed_ctrl.load_ff = load_ff;
 }

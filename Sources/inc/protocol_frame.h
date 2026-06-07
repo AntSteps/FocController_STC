@@ -37,8 +37,6 @@
 #define PROTOCOL_PARAM_ID_SPEED_KI              0x02u
 #define PROTOCOL_PARAM_ID_VELOCITY_LIMIT        0x03u
 
-#define PROTOCOL_PARAM_ID_FF_VELOCITY_GAIN      0x05u
-#define PROTOCOL_PARAM_ID_FF_ENABLE             0x06u
 #define PROTOCOL_PARAM_ID_MOTOR_POLE_PAIRS      0x10u
 #define PROTOCOL_PARAM_ID_MOTOR_PHASE_R         0x11u
 #define PROTOCOL_PARAM_ID_MOTOR_PHASE_L         0x12u
@@ -48,11 +46,12 @@
 #define PROTOCOL_PARAM_ID_SPEED_LPF_MS          0x17u
 #define PROTOCOL_PARAM_ID_FF_ACCEL_GAIN         0x18u
 #define PROTOCOL_PARAM_ID_FF_FRICTION           0x19u
-#define PROTOCOL_PARAM_ID_SPEED_SAMPLE_FREQ     0x1Au
 #define PROTOCOL_PARAM_ID_SPEED_BETA            0x1Bu  /* 二自由度系数 (0~1) */
 #define PROTOCOL_PARAM_ID_SPEED_CMD_LPF_MS      0x1Cu  /* 命令整形滤波时间常数(ms) */
 #define PROTOCOL_PARAM_ID_PLL_BANDWIDTH_HZ      0x1Du  /* PLL环路带宽(Hz) */
 #define PROTOCOL_PARAM_ID_PLL_ZETA              0x1Eu  /* PLL阻尼比 */
+#define PROTOCOL_PARAM_ID_SPEED_R               0x1Fu  /* 相电阻前馈 (Ohm) */
+#define PROTOCOL_PARAM_ID_SPEED_KE              0x21u  /* 反电动势系数 (V/(rad/s)) */
 #define PROTOCOL_PARAM_ID_ENCODER_OFFSET        0x20u
 #define PROTOCOL_PARAM_ID_CALIB_POLE_PAIRS      0x30u
 #define PROTOCOL_PARAM_ID_CALIB_DIR             0x31u
@@ -123,8 +122,7 @@ typedef struct
     uint8_t id;
     uint8_t ctrl_mode;
     float target;
-    float ff0;
-    float ff1;
+    float load_ff;
     uint8_t seq;
     uint8_t crc8;
 } CtrlCmdFrame;
@@ -205,15 +203,14 @@ typedef struct
     float speed_out_max;
     float speed_out_min;
     float speed_lpf_time_constant_ms;
-    float ff_velocity_gain;
     float ff_acceleration_gain;
     float ff_friction_compensation;
-    uint8_t ff_enable;
-    float speed_sample_freq_hz;
     float speed_beta;               /* 二自由度系数 */
     float speed_cmd_lpf_ms;         /* 命令整形滤波时间常数(ms) */
     float pll_bandwidth_hz;         /* PLL环路带宽(Hz) */
     float pll_zeta;                 /* PLL阻尼比 */
+    float speed_R;                  /* 相电阻前馈 (Ohm) */
+    float speed_Ke;                 /* 反电动势系数 (V/(rad/s)) */
 
     float velocity_limit;
     int16_t encoder_offset;
@@ -254,8 +251,7 @@ typedef struct
     uint8_t seq;
     uint8_t control_mode;
     float target;
-    float ff0;
-    float ff1;
+    float load_ff;
     uint8_t param_id;
     float value;
     uint8_t query_type;

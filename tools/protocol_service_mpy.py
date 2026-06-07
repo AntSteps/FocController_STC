@@ -91,13 +91,12 @@ class MicroPythonProtocolService:
         self.sequence_counter = (self.sequence_counter + 1) & 0xFF
         return seq
 
-    def set_speed(self, motor_id, speed, ff0=0.0, ff1=0.0, seq=None):
+    def set_speed(self, motor_id, speed, load_ff=0.0, seq=None):
         return self.send_control(
             motor_id=motor_id,
             ctrl_mode=CTRL_MODE_SPEED,
             target=speed,
-            ff0=ff0,
-            ff1=ff1,
+            load_ff=load_ff,
             seq=seq,
         )
 
@@ -106,14 +105,13 @@ class MicroPythonProtocolService:
             motor_id=motor_id,
             ctrl_mode=CTRL_MODE_STOP,
             target=0.0,
-            ff0=0.0,
-            ff1=0.0,
+            load_ff=0.0,
             seq=seq,
         )
 
-    def send_control(self, motor_id, ctrl_mode, target, ff0=0.0, ff1=0.0, seq=None):
+    def send_control(self, motor_id, ctrl_mode, target, load_ff=0.0, seq=None):
         seq = self._resolve_seq(seq)
-        frame = build_ctrl_cmd_frame(motor_id, ctrl_mode, target, ff0, ff1, seq)
+        frame = build_ctrl_cmd_frame(motor_id, ctrl_mode, target, load_ff, seq)
         return self._request(
             frame,
             expected_seq=seq,

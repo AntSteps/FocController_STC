@@ -317,25 +317,21 @@ class AppConfig:
             ChoiceOption(0x01, "速度环 Kp"),
             ChoiceOption(0x02, "速度环 Ki"),
             ChoiceOption(0x03, "速度限制"),
-            ChoiceOption(0x04, "电流限制"),
-            ChoiceOption(0x05, "速度前馈增益"),
-            ChoiceOption(0x06, "前馈使能"),
             ChoiceOption(0x10, "电机极对数"),
             ChoiceOption(0x11, "相电阻"),
             ChoiceOption(0x12, "相电感"),
-            ChoiceOption(0x13, "电流环 Kp"),
-            ChoiceOption(0x14, "电流环 Ki"),
             ChoiceOption(0x15, "速度输出上限"),
             ChoiceOption(0x16, "速度输出下限"),
             ChoiceOption(0x17, "速度滤波常数"),
             ChoiceOption(0x18, "加速度前馈"),
             ChoiceOption(0x19, "摩擦补偿"),
-            ChoiceOption(0x1A, "速度环采样频率"),
             ChoiceOption(0x1B, "二自由度系数"),
             ChoiceOption(0x1C, "命令滤波常数"),
             ChoiceOption(0x1D, "PLL带宽"),
             ChoiceOption(0x1E, "PLL阻尼比"),
+            ChoiceOption(0x1F, "相电阻前馈 (R)"),
             ChoiceOption(0x20, "编码器偏移"),
+            ChoiceOption(0x21, "反电动势系数 (Ke)"),
             ChoiceOption(0x30, "校准极对数"),
             ChoiceOption(0x31, "校准方向"),
             ChoiceOption(0x32, "电角零位偏移"),
@@ -437,8 +433,7 @@ class FOCGuiApp:
             "seq_input": "seq_input",
             "control_mode": "control_mode",
             "control_target": "control_target",
-            "control_ff0": "control_ff0",
-            "control_ff1": "control_ff1",
+            "control_load_ff": "control_load_ff",
             "query_param_choice": "query_param_choice",
             "write_param_choice": "write_param_choice",
             "write_param_value": "write_param_value",
@@ -679,15 +674,8 @@ class FOCGuiApp:
                         format="%.6f",
                     )
                     dpg.add_input_float(
-                        label="前馈 0",
-                        tag=self.tags["control_ff0"],
-                        default_value=0.0,
-                        width=self._px(240),
-                        format="%.6f",
-                    )
-                    dpg.add_input_float(
-                        label="前馈 1",
-                        tag=self.tags["control_ff1"],
+                        label="负载前馈",
+                        tag=self.tags["control_load_ff"],
                         default_value=0.0,
                         width=self._px(240),
                         format="%.6f",
@@ -940,18 +928,16 @@ class FOCGuiApp:
         motor_id = self._selected_motor_id()
         seq = self._next_seq()
         target = float(dpg.get_value(self.tags["control_target"]))
-        ff0 = float(dpg.get_value(self.tags["control_ff0"]))
-        ff1 = float(dpg.get_value(self.tags["control_ff1"]))
-        summary = f"控制命令 ID={motor_id} seq={seq} mode={mode.label} target={target:.3f}"
+        load_ff = float(dpg.get_value(self.tags["control_load_ff"]))
+        summary = f"控制命令 ID={motor_id} seq={seq} mode={mode.label} target={target:.3f} load_ff={load_ff:.3f}"
         self._schedule_user_command(
             summary,
-            lambda motor_id=motor_id, ctrl_mode=mode.value, target=target, ff0=ff0, ff1=ff1, seq=seq: (
+            lambda motor_id=motor_id, ctrl_mode=mode.value, target=target, load_ff=load_ff, seq=seq: (
                 self.service.send_control(
                     motor_id=motor_id,
                     ctrl_mode=ctrl_mode,
                     target=target,
-                    ff0=ff0,
-                    ff1=ff1,
+                    load_ff=load_ff,
                     seq=seq,
                 )
             ),
@@ -967,8 +953,7 @@ class FOCGuiApp:
                 motor_id=motor_id,
                 ctrl_mode=CTRL_MODE_STOP,
                 target=0.0,
-                ff0=0.0,
-                ff1=0.0,
+                load_ff=0.0,
                 seq=seq,
             ),
         )

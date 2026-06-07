@@ -59,8 +59,7 @@ class CtrlCmdFrame:
     motor_id: int
     ctrl_mode: int
     target: float
-    ff0: float
-    ff1: float
+    load_ff: float
     seq: int
     head: int = CTRL_CMD_HEAD
 
@@ -69,8 +68,7 @@ class CtrlCmdFrame:
             self.motor_id,
             self.ctrl_mode,
             self.target,
-            self.ff0,
-            self.ff1,
+            self.load_ff,
             self.seq,
         )
 
@@ -79,7 +77,7 @@ class CtrlCmdFrame:
         return (
             f"控制命令 ID={self.motor_id} seq={self.seq} "
             f"mode={mode_label} target={self.target:.3f} "
-            f"ff=[{self.ff0:.3f}, {self.ff1:.3f}]"
+            f"load_ff={self.load_ff:.3f}"
         )
 
 
@@ -213,19 +211,19 @@ class ParamSnapshot:
     motor_pole_pairs: int
     motor_phase_resistance: float
     motor_phase_inductance: float
-    cur_kp: float
-    cur_ki: float
     speed_kp: float
     speed_ki: float
     speed_out_max: float
     speed_out_min: float
     speed_lpf_time_constant_ms: float
-    ff_velocity_gain: float
     ff_acceleration_gain: float
     ff_friction_compensation: float
-    ff_enable: int
-    speed_sample_freq_hz: float
-    current_limit: float
+    speed_beta: float
+    speed_cmd_lpf_ms: float
+    pll_bandwidth_hz: float
+    pll_zeta: float
+    speed_R: float
+    speed_Ke: float
     velocity_limit: float
     encoder_offset: int
     calib_pole_pairs: int
@@ -241,19 +239,19 @@ class ParamSnapshot:
             f"motor_pole_pairs = {self.motor_pole_pairs}",
             f"motor_phase_resistance = {self.motor_phase_resistance:.6f}",
             f"motor_phase_inductance = {self.motor_phase_inductance:.6f}",
-            f"cur_kp = {self.cur_kp:.6f}",
-            f"cur_ki = {self.cur_ki:.6f}",
             f"speed_kp = {self.speed_kp:.6f}",
             f"speed_ki = {self.speed_ki:.6f}",
             f"speed_out_max = {self.speed_out_max:.6f}",
             f"speed_out_min = {self.speed_out_min:.6f}",
             f"speed_lpf_time_constant_ms = {self.speed_lpf_time_constant_ms:.6f}",
-            f"ff_velocity_gain = {self.ff_velocity_gain:.6f}",
             f"ff_acceleration_gain = {self.ff_acceleration_gain:.6f}",
             f"ff_friction_compensation = {self.ff_friction_compensation:.6f}",
-            f"ff_enable = {self.ff_enable}",
-            f"speed_sample_freq_hz = {self.speed_sample_freq_hz:.6f}",
-            f"current_limit = {self.current_limit:.6f}",
+            f"speed_beta = {self.speed_beta:.6f}",
+            f"speed_cmd_lpf_ms = {self.speed_cmd_lpf_ms:.6f}",
+            f"pll_bandwidth_hz = {self.pll_bandwidth_hz:.6f}",
+            f"pll_zeta = {self.pll_zeta:.6f}",
+            f"speed_R = {self.speed_R:.6f}",
+            f"speed_Ke = {self.speed_Ke:.6f}",
             f"velocity_limit = {self.velocity_limit:.6f}",
             f"encoder_offset = {self.encoder_offset}",
             f"calib_pole_pairs = {self.calib_pole_pairs}",
@@ -283,19 +281,19 @@ class ParamSnapshotReply:
             motor_pole_pairs=int(snapshot_values["motor_pole_pairs"]),
             motor_phase_resistance=float(snapshot_values["motor_phase_resistance"]),
             motor_phase_inductance=float(snapshot_values["motor_phase_inductance"]),
-            cur_kp=float(snapshot_values["cur_kp"]),
-            cur_ki=float(snapshot_values["cur_ki"]),
             speed_kp=float(snapshot_values["speed_kp"]),
             speed_ki=float(snapshot_values["speed_ki"]),
             speed_out_max=float(snapshot_values["speed_out_max"]),
             speed_out_min=float(snapshot_values["speed_out_min"]),
             speed_lpf_time_constant_ms=float(snapshot_values["speed_lpf_time_constant_ms"]),
-            ff_velocity_gain=float(snapshot_values["ff_velocity_gain"]),
             ff_acceleration_gain=float(snapshot_values["ff_acceleration_gain"]),
             ff_friction_compensation=float(snapshot_values["ff_friction_compensation"]),
-            ff_enable=int(snapshot_values["ff_enable"]),
-            speed_sample_freq_hz=float(snapshot_values["speed_sample_freq_hz"]),
-            current_limit=float(snapshot_values["current_limit"]),
+            speed_beta=float(snapshot_values["speed_beta"]),
+            speed_cmd_lpf_ms=float(snapshot_values["speed_cmd_lpf_ms"]),
+            pll_bandwidth_hz=float(snapshot_values["pll_bandwidth_hz"]),
+            pll_zeta=float(snapshot_values["pll_zeta"]),
+            speed_R=float(snapshot_values["speed_R"]),
+            speed_Ke=float(snapshot_values["speed_Ke"]),
             velocity_limit=float(snapshot_values["velocity_limit"]),
             encoder_offset=int(snapshot_values["encoder_offset"]),
             calib_pole_pairs=int(snapshot_values["calib_pole_pairs"]),
@@ -584,16 +582,14 @@ class ProtocolService:
         motor_id: int,
         ctrl_mode: int,
         target: float,
-        ff0: float,
-        ff1: float,
+        load_ff: float,
         seq: int,
     ) -> None:
         frame = CtrlCmdFrame(
             motor_id=motor_id,
             ctrl_mode=ctrl_mode,
             target=target,
-            ff0=ff0,
-            ff1=ff1,
+            load_ff=load_ff,
             seq=seq,
         )
         self._queue_frame(frame.to_bytes(), frame.to_summary(CONTROL_MODE_SUMMARY_LABELS), seq)
