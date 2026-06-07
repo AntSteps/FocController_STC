@@ -8,12 +8,17 @@
 #include "command.h"
 #include "calibration_service.h"
 #include "motor.h"
+#include "timer.h"
 #include "debug.h"
+
+/* 通信看门狗：超过此时间未收到上位机指令则自动停机 */
+#define WATCHDOG_TIMEOUT_MS  1000u
 
 void main(void)
 {
 #if !DEBUG_MODE_ENABLE
     ProtocolRequest request;
+    uint32_t last_cmd_ms;
 #endif
 
     SYS_Init();
@@ -35,6 +40,7 @@ void main(void)
     CalibrationService_Init();
     Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
     TIMER0_Run();
+    last_cmd_ms = Timer_GetTickMs();
     while (1)
     {
         if (ProtocolController_PumpRx(&request))
@@ -42,7 +48,19 @@ void main(void)
             MOTOR_STATUS=!MOTOR_STATUS;
             ProcessCommand(&request);
             MOTOR_STATUS=!MOTOR_STATUS;
+            last_cmd_ms = Timer_GetTickMs();
         }
+
+        /* 通信看门狗：超时未收到指令则自动停机 */
+        if (Motor_GetControlMode() != MOTOR_CONTROL_MODE_STOP)
+        {
+            if ((Timer_GetTickMs() - last_cmd_ms) > WATCHDOG_TIMEOUT_MS)
+            {
+                SpeedController_SetTarget(0.0f);
+                Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
+            }
+        }
+
         CalibrationService_Poll();
     }
 #endif
@@ -76,7 +94,7 @@ void SYS_Init(void)
     ADC_Init();    // ADC初始化
     SPI_Init();    // SPI初始化
     PWMA_Init();   /* 高级PWMA初始化 */
-    // Motor_PowerOn_SelfTest();
+    Motor_PowerOn_SelfTest();
     MATHLIB_Init(); /* MATH库初始化 */
     SVPWM_Init();   /* SVPWM初始化 */
     IAP_Init();
