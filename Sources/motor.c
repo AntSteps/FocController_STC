@@ -8,6 +8,8 @@
 // PID执行周期计数（5kHz / 300Hz ≈ 16.67，取17）
 #define PID_PERIOD_COUNT    17
 #define VBUS_NOMINAL        8.5f  // 标称母线电压(V)
+#define VBUS_SCALE_MIN      5.0f
+#define VBUS_SCALE_MAX      12.0f
 
 // 开环测试开关：置1后忽略编码器电角度与速度环，直接自增电角度驱动电机旋转
 #define MOTOR_OPEN_LOOP_TEST_ENABLE        0
@@ -24,6 +26,20 @@ static float s_q_axis_voltage = 0.0f; // Q轴电压占空比（由速度环计�
 static uint8_t s_control_mode = MOTOR_CONTROL_MODE_STOP;
 static BOOL s_motor_suspended = FALSE;
 static uint16_t count =0;
+
+static float Motor_GetBusVoltageCompensation(void)
+{
+    float bus_voltage = ADC_GetBusVoltage();
+
+    if (bus_voltage < VBUS_SCALE_MIN) {
+        bus_voltage = VBUS_SCALE_MIN;
+    } else if (bus_voltage > VBUS_SCALE_MAX) {
+        bus_voltage = VBUS_SCALE_MAX;
+    }
+
+    return VBUS_NOMINAL / bus_voltage;
+}
+
 #if MOTOR_OPEN_LOOP_TEST_ENABLE
 static float s_open_loop_elec_angle = 0.0f;
 
@@ -112,7 +128,7 @@ void Motor_Update(void)
             {
                 s_pid_counter = 0u;
                 // 结合当前adc采样 对占空比进行缩放
-                s_q_axis_voltage = SpeedController_Update(s_cached_angle) * (VBUS_NOMINAL / ADC_GetBusVoltage());
+                s_q_axis_voltage = SpeedController_Update(s_cached_angle) * Motor_GetBusVoltageCompensation();
 
             }
         }
