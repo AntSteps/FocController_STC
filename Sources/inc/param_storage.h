@@ -14,7 +14,7 @@
 #define PARAM_STORAGE_MAGIC         0x5A5A
 
 // 参数版本号，数据结构改变时需要更新
-#define PARAM_STORAGE_VERSION       0x0002
+#define PARAM_STORAGE_VERSION       0x0003
 
 
 ////////////////////////////////////////
@@ -32,14 +32,11 @@ typedef struct {
     float motor_phase_resistance;
     float motor_phase_inductance;
 
-    // 电流环参数
-    float cur_kp;
-    float cur_ki;
+
 
     SpeedController_Params_t speed_ctrl_params;   /* 速度环参数 */
 
     // 运行限制参数
-    float current_limit;
     float velocity_limit;
 
     // 编码器参数

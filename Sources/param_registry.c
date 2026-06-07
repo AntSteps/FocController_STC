@@ -44,14 +44,13 @@ static const ParamRegistryEntry s_param_table[] =
     { PROTOCOL_PARAM_ID_SPEED_KP,             PARAM_OFFSET(speed_ctrl_params.kp),                         PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_KI,             PARAM_OFFSET(speed_ctrl_params.ki),                         PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_VELOCITY_LIMIT,       PARAM_OFFSET(velocity_limit),                               PARAM_VALUE_FLOAT, 0.0f,      5000.0f,  PARAM_RULE_NONE,          PARAM_APPLY_LIMITS },
-    { PROTOCOL_PARAM_ID_CURRENT_LIMIT,        PARAM_OFFSET(current_limit),                                PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_NONE },
+
     { PROTOCOL_PARAM_ID_FF_VELOCITY_GAIN,     PARAM_OFFSET(speed_ctrl_params.ff.velocity_gain),           PARAM_VALUE_FLOAT, -100.0f,   100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_FF_ENABLE,            PARAM_OFFSET(speed_ctrl_params.enable_feedforward),         PARAM_VALUE_BOOL8, 0.0f,      1.0f,     PARAM_RULE_BOOL,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_MOTOR_POLE_PAIRS,     PARAM_OFFSET(motor_pole_pairs),                             PARAM_VALUE_INT16, 1.0f,      64.0f,    PARAM_RULE_NONE,          PARAM_APPLY_NONE },
     { PROTOCOL_PARAM_ID_MOTOR_PHASE_R,        PARAM_OFFSET(motor_phase_resistance),                       PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_NONE },
     { PROTOCOL_PARAM_ID_MOTOR_PHASE_L,        PARAM_OFFSET(motor_phase_inductance),                       PARAM_VALUE_FLOAT, 0.0f,      10.0f,    PARAM_RULE_NONE,          PARAM_APPLY_NONE },
-    { PROTOCOL_PARAM_ID_CUR_KP,               PARAM_OFFSET(cur_kp),                                       PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_NONE },
-    { PROTOCOL_PARAM_ID_CUR_KI,               PARAM_OFFSET(cur_ki),                                       PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_NONE },
+
     { PROTOCOL_PARAM_ID_SPEED_OUT_MAX,        PARAM_OFFSET(speed_ctrl_params.out_max),                    PARAM_VALUE_FLOAT, 0.0f,      1.0f,     PARAM_RULE_SPEED_OUT_MAX, PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_OUT_MIN,        PARAM_OFFSET(speed_ctrl_params.out_min),                    PARAM_VALUE_FLOAT, -1.0f,     0.0f,     PARAM_RULE_SPEED_OUT_MIN, PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_LPF_MS,         PARAM_OFFSET(speed_ctrl_params.lpf_time_constant_ms),       PARAM_VALUE_FLOAT, 0.0f,      1000.0f,  PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
@@ -308,8 +307,7 @@ void ParamRegistry_FillSnapshot(ParamSnapshotPayload *payload)
     payload->motor_pole_pairs = params->motor_pole_pairs;
     payload->motor_phase_resistance = params->motor_phase_resistance;
     payload->motor_phase_inductance = params->motor_phase_inductance;
-    payload->cur_kp = params->cur_kp;
-    payload->cur_ki = params->cur_ki;
+
     payload->speed_kp = params->speed_ctrl_params.kp;
     payload->speed_ki = params->speed_ctrl_params.ki;
     payload->speed_out_max = params->speed_ctrl_params.out_max;
@@ -324,7 +322,7 @@ void ParamRegistry_FillSnapshot(ParamSnapshotPayload *payload)
     payload->speed_cmd_lpf_ms = params->speed_ctrl_params.cmd_lpf_time_constant_ms;
     payload->pll_bandwidth_hz = params->speed_ctrl_params.pll_bandwidth_hz;
     payload->pll_zeta = params->speed_ctrl_params.pll_zeta;
-    payload->current_limit = params->current_limit;
+
     payload->velocity_limit = params->velocity_limit;
     payload->encoder_offset = params->encoder_offset;
     payload->calib_pole_pairs = (int16_t)params->motor_calib.pole_pairs;

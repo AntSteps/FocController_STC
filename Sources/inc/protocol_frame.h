@@ -36,14 +36,13 @@
 #define PROTOCOL_PARAM_ID_SPEED_KP              0x01u
 #define PROTOCOL_PARAM_ID_SPEED_KI              0x02u
 #define PROTOCOL_PARAM_ID_VELOCITY_LIMIT        0x03u
-#define PROTOCOL_PARAM_ID_CURRENT_LIMIT         0x04u
+
 #define PROTOCOL_PARAM_ID_FF_VELOCITY_GAIN      0x05u
 #define PROTOCOL_PARAM_ID_FF_ENABLE             0x06u
 #define PROTOCOL_PARAM_ID_MOTOR_POLE_PAIRS      0x10u
 #define PROTOCOL_PARAM_ID_MOTOR_PHASE_R         0x11u
 #define PROTOCOL_PARAM_ID_MOTOR_PHASE_L         0x12u
-#define PROTOCOL_PARAM_ID_CUR_KP                0x13u
-#define PROTOCOL_PARAM_ID_CUR_KI                0x14u
+
 #define PROTOCOL_PARAM_ID_SPEED_OUT_MAX         0x15u
 #define PROTOCOL_PARAM_ID_SPEED_OUT_MIN         0x16u
 #define PROTOCOL_PARAM_ID_SPEED_LPF_MS          0x17u
@@ -200,8 +199,7 @@ typedef struct
     int16_t motor_pole_pairs;
     float motor_phase_resistance;
     float motor_phase_inductance;
-    float cur_kp;
-    float cur_ki;
+
     float speed_kp;
     float speed_ki;
     float speed_out_max;
@@ -216,7 +214,7 @@ typedef struct
     float speed_cmd_lpf_ms;         /* 命令整形滤波时间常数(ms) */
     float pll_bandwidth_hz;         /* PLL环路带宽(Hz) */
     float pll_zeta;                 /* PLL阻尼比 */
-    float current_limit;
+
     float velocity_limit;
     int16_t encoder_offset;
     int16_t calib_pole_pairs;
