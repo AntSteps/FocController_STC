@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import numpy as np
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
@@ -298,6 +299,9 @@ class TelemetryState:
             "voltage": deque(maxlen=DEFAULT_HISTORY_LENGTH),
         }
     )
+    history_timestamps: Deque[float] = field(
+        default_factory=lambda: deque(maxlen=DEFAULT_HISTORY_LENGTH)
+    )
 
 
 @dataclass
@@ -465,6 +469,9 @@ class FOCGuiApp:
             "vel_x_axis": "vel_x_axis",
             "pos_x_axis": "pos_x_axis",
             "vol_x_axis": "vol_x_axis",
+            "fft_series": "fft_series",
+            "fft_x_axis": "fft_x_axis",
+            "fft_y_axis": "fft_y_axis",
         }
 
     def run(self) -> None:
@@ -801,6 +808,16 @@ class FOCGuiApp:
                 "母线电压", "V", self.tags["voltage_series"], "voltage_y_axis",
                 x_axis_tag=self.tags["vol_x_axis"], height=130,
             )
+            # 速度 FFT 频谱图
+            with dpg.plot(
+                label="速度频谱 (FFT)", height=self._px(200), width=-1,
+                anti_aliased=True, crosshairs=True,
+            ):
+                dpg.add_plot_legend()
+                fft_x = dpg.add_plot_axis(dpg.mvXAxis, label="频率 (Hz)", tag=self.tags["fft_x_axis"])
+                fft_y = dpg.add_plot_axis(dpg.mvYAxis, label="幅值", tag=self.tags["fft_y_axis"])
+                dpg.add_line_series([], [], label="速度 FFT", parent=fft_y, tag=self.tags["fft_series"])
+                dpg.set_axis_limits_auto(fft_y)
 
     def _build_log_panel(self) -> None:
         with dpg.collapsing_header(label="通信日志", default_open=True):
@@ -1212,6 +1229,7 @@ class FOCGuiApp:
             self.state.histories["output"].append(reply.output)
             self.state.histories["position"].append(reply.position)
             self.state.histories["voltage"].append(reply.voltage)
+            self.state.history_timestamps.append(time.time())
             self.plot_dirty = True
         elif isinstance(reply, ParamValueReply):
             self.state.last_param_value = reply
@@ -1303,6 +1321,22 @@ class FOCGuiApp:
         # 更新各图 X 轴范围
         for x_axis_tag in (self.tags["vel_x_axis"], self.tags["pos_x_axis"], self.tags["vol_x_axis"]):
             dpg.set_axis_limits(x_axis_tag, x_min, x_max)
+
+        # 速度 FFT 频谱（使用真实采样时间）
+        vel_data = list(self.state.histories["velocity"])
+        ts_data = list(self.state.history_timestamps)
+        if len(vel_data) >= 8 and len(ts_data) == len(vel_data):
+            arr = np.array(vel_data, dtype=np.float64)
+            arr = arr - np.mean(arr)  # 去直流
+
+            # 计算真实平均采样间隔
+            ts = np.array(ts_data, dtype=np.float64)
+            dt_mean = np.mean(np.diff(ts))
+            if dt_mean > 0:
+                spectrum = np.abs(np.fft.rfft(arr))
+                freqs = np.fft.rfftfreq(len(arr), d=dt_mean)
+                dpg.set_value(self.tags["fft_series"], [freqs.tolist(), spectrum.tolist()])
+                dpg.set_axis_limits(self.tags["fft_x_axis"], freqs[1] if len(freqs) > 1 else 0, freqs[-1])
 
     def _append_log(self, level: str, message: str) -> None:
         now = time.time()
