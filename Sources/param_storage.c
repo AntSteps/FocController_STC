@@ -65,19 +65,16 @@ static void SetDefaultValues(void)
     s_param_data.motor_phase_resistance = 0.1f; // 默认0.1欧姆
     s_param_data.motor_phase_inductance = 0.0001f; // 默认100uH
 
-    // 电流环默认PID (需要根据实际电机调试)
-    s_param_data.cur_kp = 0.1f;
-    s_param_data.cur_ki = 0.01f;
 
     // 速度环默认参数
-    s_param_data.speed_ctrl_params.kp = 0.01f;
+    s_param_data.speed_ctrl_params.kp = 0.2f;
     s_param_data.speed_ctrl_params.ki = 0.00001f;
     s_param_data.speed_ctrl_params.beta = 1.0f;  /* 二自由度系数，默认1（标准PI） */
     s_param_data.speed_ctrl_params.out_max = 1.0f;
     s_param_data.speed_ctrl_params.out_min = -1.0f;
     s_param_data.speed_ctrl_params.lpf_time_constant_ms = 100.0f;
     s_param_data.speed_ctrl_params.cmd_lpf_time_constant_ms = 0.0f;  /* 命令整形滤波，默认不滤波 */
-    s_param_data.speed_ctrl_params.pll_bandwidth_hz = 100.0f;  /* PLL带宽，默认100Hz */
+    s_param_data.speed_ctrl_params.pll_bandwidth_hz = 25.0f;   /* PLL带宽，默认20Hz */
     s_param_data.speed_ctrl_params.pll_zeta = 0.707f;          /* PLL阻尼比，默认0.707 */
     s_param_data.speed_ctrl_params.ff.velocity_gain = 0.0f;
     s_param_data.speed_ctrl_params.ff.acceleration_gain = 0.0f;
@@ -86,7 +83,7 @@ static void SetDefaultValues(void)
     s_param_data.speed_ctrl_params.sample_freq_hz = 300.0f;
 
     // 默认限制值
-    s_param_data.current_limit = 10.0f;         // 10A
+
     s_param_data.velocity_limit = 1000.0f;      // 1000 rad/s
 
     // 编码器默认参数
