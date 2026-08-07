@@ -70,7 +70,7 @@ void TelemetryService_BuildStateReply(ProtocolReply *reply, uint8_t seq)
     reply->target = SpeedController_GetTarget();
     reply->velocity = SpeedController_GetFilteredSpeed();
     reply->output = Motor_GetQAxisVoltage();
-    reply->position = Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle());
+    reply->position = Motor_GetCachedMechanicalAngle();
     reply->voltage = ADC_GetBusVoltage();
     reply->health_status = TelemetryService_BuildHealthStatus();
 }

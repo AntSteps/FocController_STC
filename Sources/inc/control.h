@@ -13,6 +13,7 @@
 /* 高频观测器与低频速度环的更新频率。 */
 #define SPEED_OBSERVER_SAMPLE_FREQ_HZ  5000.0f
 #define SPEED_CTRL_DECIMATION          17u
+#define SPEED_CTRL_DECIMATION_INV      0.0588235294f
 #define SPEED_CTRL_SAMPLE_FREQ_HZ      (SPEED_OBSERVER_SAMPLE_FREQ_HZ / (float)SPEED_CTRL_DECIMATION)
 
 /*------------------------------------------
@@ -55,7 +56,8 @@ void PI_Init(PI_Controller_t *pi, float kp, float ki, float beta, float out_max,
 // 重置PI控制器（清除积分）
 void PI_Reset(PI_Controller_t *pi);
 // 更新PI控制器，比例项和积分项可使用不同的反馈速度
-float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback);
+float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback,
+                float out_max, float out_min);
 
 
 /*------------------------------------------
@@ -67,6 +69,7 @@ typedef struct {
     /* 参数 */
     float kp;               /* 环路比例增益 */
     float ki;               /* 环路积分增益 */
+    float dt_half;          /* 采样周期的一半，初始化时预计算 */
 
     /* 状态 */
     float est_angle;        /* 估计角度 */
@@ -79,11 +82,12 @@ typedef struct {
 } PLL_SpeedObserver_t;
 
 // 初始化PLL观测器，bandwidth_hz为环路带宽(Hz)，zeta为阻尼比
-void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta, float initial_angle);
+void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta,
+              float initial_angle, float sample_freq_hz);
 // 重置PLL观测器
 void PLL_Reset(PLL_SpeedObserver_t *pll, float initial_angle);
 // 更新PLL观测器，传入测量机械角度(rad)，返回估计速度(rad/s)
-float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_freq_hz);
+float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle);
 // 获取PLL估计速度
 float PLL_GetSpeed(PLL_SpeedObserver_t *pll);
 
@@ -159,6 +163,7 @@ typedef struct {
     float friction_ff;          /* 摩擦前馈 */
     float i_output;             /* 总电流参考 = pi + accel_ff + load_ff + friction_ff */
     float total_output;         /* 电压输出 = i_output * R + Ke * ω */
+    float inv_R;                /* 相电阻倒数，参数刷新时预计算 */
 
     /* 加速度计算用 */
     float prev_target_speed;    /* 上次目标速度（用于差分） */
@@ -186,7 +191,7 @@ float SpeedController_UpdateObserver(float mechanical_angle);
 // 累计满一个速度环周期时返回平均速度
 BOOL SpeedController_TryGetAveragedSpeed(float *averaged_speed);
 // 低频更新速度PI（传入降采样前平均后的速度），返回q轴电压
-float SpeedController_UpdateFromSpeed(float measured_speed);
+float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage);
 // 重置速度环
 void SpeedController_Reset(void);
 // 运行时刷新参数，保留目标速度

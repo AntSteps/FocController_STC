@@ -43,7 +43,7 @@ void Debug_Poll(void)
     memcpy(pu8UR3DMATxBuffer + 4u, (const void *)&f_val, 4u);
     f_val = Motor_GetQAxisVoltage();
     memcpy(pu8UR3DMATxBuffer + 8u, (const void *)&f_val, 4u);
-    f_val = Motor_Calibration_GetMechanicalAngle(Encoder_Get_Angle());
+    f_val = Motor_GetCachedMechanicalAngle();
     memcpy(pu8UR3DMATxBuffer + 12u, (const void *)&f_val, 4u);
     memcpy(pu8UR3DMATxBuffer + 16u, s_dbg_tail, 4u);
 

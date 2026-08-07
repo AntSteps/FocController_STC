@@ -41,9 +41,9 @@ float Encoder_UpdateAndGetAngle(void)
         angle = (float)raw_angle * ENCODER_ANGLE_SCALE;
         mag_status = ((b2 & 0x03) << 2) | (b3 >> 6);
         count++;
-        if (count%300==0){
+        if (count >= 300u){
             ENCODER_STATUS = !ENCODER_STATUS;
-            count=0;
+            count = 0u;
         }
     }
     else

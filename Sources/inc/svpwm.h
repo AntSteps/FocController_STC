@@ -1,6 +1,7 @@
 #ifndef __SVPWM_H__
 #define __SVPWM_H__
 
+#define SVPWM_LINEAR_MODULATION_MAX  1.154700538f
 
 
 void SVPWM_Init(void);

@@ -55,7 +55,7 @@ void PWMA_Init(void)
     PWM_UpdateDuty(PWMA_CH1, 199);      //设置通道的PWM占空比
     PWMA_OC1REFPWMMode1();              //设置通道输出参考信号为PWM模式1信号
     PWMA_DisableOC1FastMode();          //关闭通道快速输出
-    PWMA_UnbufferCCR1();                //关闭CCRn预装载功能
+    PWMA_BufferCCR1();                  //使能预装载，三相在更新事件同时生效
     PWMA_DisableETRFClearOC1REF();      //通道输出不受ETI信号影响
     PWMA_CC1PNonInverted();             //设置正极通道输出高电平有效
     PWMA_OC1PIdleLevelLow();            //空闲时正极通道输出低电平
@@ -68,7 +68,7 @@ void PWMA_Init(void)
     PWM_UpdateDuty(PWMA_CH2, 199);      //设置通道的PWM占空比
     PWMA_OC2REFPWMMode1();              //设置通道输出参考信号为PWM模式1信号
     PWMA_DisableOC2FastMode();          //关闭通道快速输出
-    PWMA_UnbufferCCR2();                //关闭CCRn预装载功能
+    PWMA_BufferCCR2();                  //使能预装载，三相在更新事件同时生效
     PWMA_DisableETRFClearOC2REF();      //通道输出不受ETI信号影响
     PWMA_CC2PNonInverted();             //设置正极通道输出高电平有效
     PWMA_OC2PIdleLevelLow();            //空闲时正极通道输出低电平
@@ -81,7 +81,7 @@ void PWMA_Init(void)
     PWM_UpdateDuty(PWMA_CH3, 199);      //设置通道的PWM占空比
     PWMA_OC3REFPWMMode1();              //设置通道输出参考信号为PWM模式1信号
     PWMA_DisableOC3FastMode();          //关闭通道快速输出
-    PWMA_UnbufferCCR3();                //关闭CCRn预装载功能
+    PWMA_BufferCCR3();                  //使能预装载，三相在更新事件同时生效
     PWMA_DisableETRFClearOC3REF();      //通道输出不受ETI信号影响
     PWMA_CC3PNonInverted();             //设置正极通道输出高电平有效
     PWMA_OC3PIdleLevelLow();            //空闲时正极通道输出低电平
@@ -155,6 +155,13 @@ void PWM_UpdateDuty(uint8_t PWMx, uint16_t nCompare)
         PWMB_SetCCR8Value(nCompare);    //设置通道比较值
         break;
     }
+}
+
+void PWM_UpdateDutyABC(uint16_t duty_a, uint16_t duty_b, uint16_t duty_c)
+{
+    PWMA_SetCCR1Value(duty_a);
+    PWMA_SetCCR2Value(duty_b);
+    PWMA_SetCCR3Value(duty_c);
 }
 
 ////////////////////////////////////////

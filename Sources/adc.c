@@ -33,7 +33,6 @@
 #define BUS_VOLTAGE_ADC_CH  1           // 母线电压采集通道
 
 static uint16_t s_busVoltageRaw = 0;    // 母线电压ADC原始值
-static float s_busVoltage = 0.0f;       // 母线电压值(V)
 
 //<<AICUBE_USER_GLOBAL_DEFINE_END>>
 
@@ -102,9 +101,8 @@ void ADC_ISR(void) interrupt ADC_VECTOR
     ADC_ClearFlag();                    //清除ADC转换完成中断标志
     fADCConverted = 1;                  //设置转换结束标志
 
-    // 读取母线电压ADC值并转换为电压
+    // 中断只缓存原始值，避免在连续采样路径执行浮点运算
     s_busVoltageRaw = ADC_ReadResult();
-    s_busVoltage = s_busVoltageRaw * VIN_SCALE_FACTOR;
 
     // 自动重启下一次转换，实现连续采集
     ADC_Start();
@@ -122,7 +120,7 @@ void ADC_ISR(void) interrupt ADC_VECTOR
 ////////////////////////////////////////
 float ADC_GetBusVoltage(void)
 {
-    return ADC_ReadResult() * VIN_SCALE_FACTOR;
+    return (float)s_busVoltageRaw * VIN_SCALE_FACTOR;
 }
 
 ////////////////////////////////////////

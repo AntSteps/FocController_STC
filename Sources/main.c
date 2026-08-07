@@ -29,7 +29,7 @@ void main(void)
 
 #if DEBUG_MODE_ENABLE
     Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);
-    TIMER0_Run();
+    TIMER0_RunSynchronizedWithPWMA();
     Debug_Init();
     while (1)
     {
@@ -39,7 +39,7 @@ void main(void)
     ProtocolController_Init();
     CalibrationService_Init();
     Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
-    TIMER0_Run();
+    TIMER0_RunSynchronizedWithPWMA();
     last_cmd_ms = Timer_GetTickMs();
     while (1)
     {

@@ -12,9 +12,11 @@
 // 开环测试时固定输出的Q轴电压幅值
 #define MOTOR_OPEN_LOOP_TEST_Q_VOLTAGE     0.8f
 #define MOTOR_OPEN_LOOP_TEST_TWO_PI        6.28318530718f
+#define MOTOR_MIN_BUS_VOLTAGE              1.0f
 
 // 控制相关
 static float s_cached_angle = 0.0f;   // 缓存的角度（用于速度计算）
+static float s_cached_mechanical_angle = 0.0f;
 static float s_q_axis_voltage = 0.0f; // Q轴电压占空比（由速度环计算）
 static uint8_t s_control_mode = MOTOR_CONTROL_MODE_STOP;
 static BOOL s_motor_suspended = FALSE;
@@ -79,7 +81,8 @@ BOOL Motor_IsSuspended(void)
 void Motor_Update(void)
 {
     count++;
-    if (count%1000==0){
+    if (count >= 1000u){
+        count = 0u;
         MOTOR_STATUS=!MOTOR_STATUS;
     }
 #if MOTOR_OPEN_LOOP_TEST_ENABLE
@@ -97,18 +100,27 @@ void Motor_Update(void)
         float elec_angle;
         float mech_angle;
         float speed_feedback;
+        float bus_voltage;
         s_cached_angle = Encoder_UpdateAndGetAngle();
 
         Motor_Calibration_GetAngles(s_cached_angle, &mech_angle, &elec_angle);
+        s_cached_mechanical_angle = mech_angle;
 
         if (s_control_mode == MOTOR_CONTROL_MODE_SPEED)
         {
             (void)SpeedController_UpdateObserver(mech_angle);
             if (SpeedController_TryGetAveragedSpeed(&speed_feedback))
             {
-                /* 电压→占空比：Vout / Vbus */
-                s_q_axis_voltage = SpeedController_UpdateFromSpeed(speed_feedback)
-                                 / ADC_GetBusVoltage();
+                bus_voltage = ADC_GetBusVoltage();
+                if (bus_voltage > MOTOR_MIN_BUS_VOLTAGE) {
+                    /* 电压→调制度：Vout / Vbus */
+                    s_q_axis_voltage = SpeedController_UpdateFromSpeed(speed_feedback,
+                                                                       bus_voltage)
+                                     / bus_voltage;
+                } else {
+                    (void)SpeedController_UpdateFromSpeed(speed_feedback, 0.0f);
+                    s_q_axis_voltage = 0.0f;
+                }
             }
         }
         else
@@ -117,8 +129,11 @@ void Motor_Update(void)
         }
 
         /* 占空比限幅（基于实际PWM周期） */
-        if (s_q_axis_voltage > 1.0f) s_q_axis_voltage = 1.0f;
-        else if (s_q_axis_voltage < -1.0f) s_q_axis_voltage = -1.0f;
+        if (s_q_axis_voltage > SVPWM_LINEAR_MODULATION_MAX) {
+            s_q_axis_voltage = SVPWM_LINEAR_MODULATION_MAX;
+        } else if (s_q_axis_voltage < -SVPWM_LINEAR_MODULATION_MAX) {
+            s_q_axis_voltage = -SVPWM_LINEAR_MODULATION_MAX;
+        }
 
         SVPWM_UpdateQAxis(elec_angle, s_q_axis_voltage);
     }
@@ -128,6 +143,11 @@ void Motor_Update(void)
 float Motor_GetCachedAngle(void)
 {
     return s_cached_angle;
+}
+
+float Motor_GetCachedMechanicalAngle(void)
+{
+    return s_cached_mechanical_angle;
 }
 
 float Motor_GetQAxisVoltage(void)

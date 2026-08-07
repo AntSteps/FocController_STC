@@ -14,6 +14,7 @@ void Motor_Update(void);
 
 // 获取当前缓存的机械角度（供控制模块使用）
 float Motor_GetCachedAngle(void);
+float Motor_GetCachedMechanicalAngle(void);
 
 // 获取当前Q轴电压（调试用）
 float Motor_GetQAxisVoltage(void);

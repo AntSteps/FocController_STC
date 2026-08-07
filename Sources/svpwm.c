@@ -27,6 +27,7 @@
 
 /* 查表法常量定义 */
 #define SVPWM_LUT_SIZE  1024  // 表格大小
+#define SVPWM_LUT_MASK  (SVPWM_LUT_SIZE - 1u)
 #define OFFSET_120_DEG  (SVPWM_LUT_SIZE / 3)      // Phase C 偏移 (+120°)
 #define OFFSET_240_DEG  (SVPWM_LUT_SIZE * 2 / 3)  // Phase B 偏移 (-120° 等同于 +240°)
 #define OFFSET_90_DEG   (SVPWM_LUT_SIZE / 4)      // Q轴 偏移 (+90°)
@@ -36,6 +37,7 @@
 /* 缓存区 */
 static uint16_t s_pwm_period = 0;
 static float s_half_period = 0.0f;
+static int32_t s_pwm_center = 0;
 
 /* 马鞍波查找表，存放归一化(Q12格式)的波形数据 */
 int16_t xdata s_svpwm_lut[SVPWM_LUT_SIZE];
@@ -51,6 +53,7 @@ void SVPWM_Init(void)
     
     s_pwm_period = 399; 
     s_half_period = (float)(s_pwm_period + 1) * 0.5f;
+    s_pwm_center = (int32_t)s_half_period;
 
     /* 动态生成 A相的基准马鞍波查表 */
     for (i = 0; i < SVPWM_LUT_SIZE; i++) 
@@ -84,28 +87,31 @@ static void SVPWM_Update_Core(uint16_t base_index, float mag)
     uint16_t idx_a, idx_b, idx_c;
 
     // 获取三相的查表索引 
-    idx_a = base_index % SVPWM_LUT_SIZE;
-    idx_b = (base_index + OFFSET_240_DEG) % SVPWM_LUT_SIZE;
-    idx_c = (base_index + OFFSET_120_DEG) % SVPWM_LUT_SIZE;
+    idx_a = base_index & SVPWM_LUT_MASK;
+    idx_b = (base_index + OFFSET_240_DEG) & SVPWM_LUT_MASK;
+    idx_c = (base_index + OFFSET_120_DEG) & SVPWM_LUT_MASK;
 
     // 将幅度与半周期混合，预先准备好乘数
     // 这一步把浮点彻底终结，接下来的计算全是定点整型
+    if (mag > SVPWM_LINEAR_MODULATION_MAX) {
+        mag = SVPWM_LINEAR_MODULATION_MAX;
+    } else if (mag < -SVPWM_LINEAR_MODULATION_MAX) {
+        mag = -SVPWM_LINEAR_MODULATION_MAX;
+    }
     mag_scaled = (int32_t)(mag * s_half_period);
 
     // 查表 乘法 12 缩放 加上 中点偏置
     // 公式推导: duty = half_period + ( (LUT_val / 4096) * (mag * half_period) )
-    duty_a = (int32_t)s_half_period + ((s_svpwm_lut[idx_a] * mag_scaled) >> 12);
-    duty_b = (int32_t)s_half_period + ((s_svpwm_lut[idx_b] * mag_scaled) >> 12);
-    duty_c = (int32_t)s_half_period + ((s_svpwm_lut[idx_c] * mag_scaled) >> 12);
+    duty_a = s_pwm_center + ((s_svpwm_lut[idx_a] * mag_scaled) >> 12);
+    duty_b = s_pwm_center + ((s_svpwm_lut[idx_b] * mag_scaled) >> 12);
+    duty_c = s_pwm_center + ((s_svpwm_lut[idx_c] * mag_scaled) >> 12);
 
     // 限幅保护
     if (duty_a < 0) duty_a = 0; else if (duty_a > s_pwm_period) duty_a = s_pwm_period;
     if (duty_b < 0) duty_b = 0; else if (duty_b > s_pwm_period) duty_b = s_pwm_period;
     if (duty_c < 0) duty_c = 0; else if (duty_c > s_pwm_period) duty_c = s_pwm_period;
     // 更新寄存器
-    PWM_UpdateDuty(PWMA_CH1, (uint16_t)duty_a);
-    PWM_UpdateDuty(PWMA_CH2, (uint16_t)duty_b);
-    PWM_UpdateDuty(PWMA_CH3, (uint16_t)duty_c);
+    PWM_UpdateDutyABC((uint16_t)duty_a, (uint16_t)duty_b, (uint16_t)duty_c);
 }
 
 
@@ -113,7 +119,7 @@ void SVPWM_Update(float angle_el, float mag)
 {
 
     int32_t angle_int = (int32_t)(angle_el * ((float)SVPWM_LUT_SIZE / TWO_PI));
-    uint16_t base_index = (uint16_t)((angle_int % SVPWM_LUT_SIZE + SVPWM_LUT_SIZE) % SVPWM_LUT_SIZE);
+    uint16_t base_index = ((uint16_t)angle_int) & SVPWM_LUT_MASK;
 
     SVPWM_Update_Core(base_index, mag);
 }
@@ -122,7 +128,7 @@ void SVPWM_Update(float angle_el, float mag)
 void SVPWM_UpdateQAxis(float angle_el, float mag)
 {
     int32_t angle_int = (int32_t)(angle_el * ((float)SVPWM_LUT_SIZE / TWO_PI));
-    uint16_t base_index = (uint16_t)((angle_int % SVPWM_LUT_SIZE + SVPWM_LUT_SIZE) % SVPWM_LUT_SIZE);
+    uint16_t base_index = ((uint16_t)angle_int) & SVPWM_LUT_MASK;
     
     base_index += OFFSET_90_DEG;
 

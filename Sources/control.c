@@ -1,4 +1,5 @@
 #include "control.h"
+#include "svpwm.h"
 
 #define PI 3.141592654f
 #define TWO_PI 6.283185307f
@@ -75,7 +76,8 @@ void PI_Reset(PI_Controller_t *pi)
     pi->output = 0.0f;
 }
 
-float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback)
+float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback,
+                float out_max, float out_min)
 {
     float p_term, i_term, output;
     float error_i = ref - i_feedback;             /* 积分项只跟随趋势速度 */
@@ -92,14 +94,14 @@ float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedba
     output = p_term + i_term;
 
     /* 输出限幅 + 抗积分饱和 */
-    if (output > pi->out_max) {
-        output = pi->out_max;
+    if (output > out_max) {
+        output = out_max;
         /* 如果积分导致饱和，回退积分 */
         if (error_i > 0 && pi->ki > 0) {
             pi->integral -= error_i;
         }
-    } else if (output < pi->out_min) {
-        output = pi->out_min;
+    } else if (output < out_min) {
+        output = out_min;
         /* 如果积分导致饱和，回退积分 */
         if (error_i < 0 && pi->ki > 0) {
             pi->integral -= error_i;
@@ -115,12 +117,14 @@ float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedba
  * PLL速度观测器实现
  *=========================================*/
 #if SPEED_OBSERVER_METHOD == 1
-void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta, float initial_angle)
+void PLL_Init(PLL_SpeedObserver_t *pll, float bandwidth_hz, float zeta,
+              float initial_angle, float sample_freq_hz)
 {
     float omega_n = TWO_PI * bandwidth_hz;
 
     pll->kp = 2.0f * zeta * omega_n;
     pll->ki = omega_n * omega_n;
+    pll->dt_half = 0.5f / sample_freq_hz;
     pll->est_angle = initial_angle;
     pll->est_speed = 0.0f;
     pll->integral = 0.0f;
@@ -137,27 +141,25 @@ void PLL_Reset(PLL_SpeedObserver_t *pll, float initial_angle)
     pll->prev_speed = 0.0f;
 }
 
-float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle, float sample_freq_hz)
+float PLL_Update(PLL_SpeedObserver_t *pll, float measured_angle)
 {
     float angle_err;
-    float dt_half;
 
     /* 相位检测器：测量角度与估计角度的闭环误差 */
     angle_err = NormalizeAnglePi(measured_angle - pll->est_angle);
-    dt_half = 0.5f / sample_freq_hz;
 
     /* PI环路滤波器（Tustin积分）
      * 梯形积分: integral += (err + prev_err) * dt/2
      * 比欧拉更精确，高带宽下不会发散
      */
-    pll->integral += (angle_err + pll->prev_angle_err) * pll->ki * dt_half;
+    pll->integral += (angle_err + pll->prev_angle_err) * pll->ki * pll->dt_half;
     pll->est_speed = pll->kp * angle_err + pll->integral;
     pll->prev_angle_err = angle_err;
 
     /* 角度积分器（Tustin积分）
      * est_angle += (speed + prev_speed) * dt/2
      */
-    pll->est_angle += (pll->est_speed + pll->prev_speed) * dt_half;
+    pll->est_angle += (pll->est_speed + pll->prev_speed) * pll->dt_half;
     pll->prev_speed = pll->est_speed;
 
 
@@ -206,10 +208,16 @@ void SpeedController_Init(SpeedController_Params_t *params)
     g_speed_ctrl.i_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
     g_speed_ctrl.prev_target_speed = 0.0f;
+    if (params->ff.R > 0.0f) {
+        g_speed_ctrl.inv_R = 1.0f / params->ff.R;
+    } else {
+        g_speed_ctrl.inv_R = 0.0f;
+    }
 
 #if SPEED_OBSERVER_METHOD == 1
     /* PLL参数在此设置，角度由首次Update时从编码器读取初始化 */
-    PLL_Init(&g_speed_ctrl.pll, params->pll_bandwidth_hz, params->pll_zeta, 0.0f);
+    PLL_Init(&g_speed_ctrl.pll, params->pll_bandwidth_hz, params->pll_zeta,
+             0.0f, SPEED_OBSERVER_SAMPLE_FREQ_HZ);
 #endif
 }
 
@@ -251,9 +259,7 @@ float SpeedController_UpdateObserver(float mechanical_angle)
         #if SPEED_OBSERVER_METHOD == 1
         /* PLL速度观测器：直接传入角度，内部完成差分+滤波 */
         g_speed_ctrl.last_angle = mechanical_angle;
-        speed = PLL_Update(&g_speed_ctrl.pll,
-                           mechanical_angle,
-                           SPEED_OBSERVER_SAMPLE_FREQ_HZ);
+        speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle);
         #else
         {
             /* 差分测速：计算角度差分（处理跨圈情况） */
@@ -283,19 +289,27 @@ BOOL SpeedController_TryGetAveragedSpeed(float *averaged_speed)
         return FALSE;
     }
 
-    *averaged_speed = g_speed_ctrl.observer_speed_sum
-                    / (float)g_speed_ctrl.observer_sample_count;
+    *averaged_speed = g_speed_ctrl.observer_speed_sum * SPEED_CTRL_DECIMATION_INV;
     g_speed_ctrl.observer_speed_sum = 0.0f;
     g_speed_ctrl.observer_sample_count = 0u;
     return TRUE;
 }
 
-float SpeedController_UpdateFromSpeed(float measured_speed)
+float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
 {
     float residual;
     float shaped_residual;
     float residual_rho;
     float residual_deadband;
+    float ff_current;
+    float bemf_voltage;
+    float voltage_limit;
+    float current_pi_max;
+    float current_pi_min;
+    float voltage_pi_max;
+    float voltage_pi_min;
+    float pi_max;
+    float pi_min;
 
     g_speed_ctrl.fast_speed = measured_speed;
     g_speed_ctrl.trend_speed = LPF_Update(&g_speed_ctrl.trend_lpf, measured_speed);
@@ -318,12 +332,6 @@ float SpeedController_UpdateFromSpeed(float measured_speed)
     /* 命令整形：每个速度环周期推进一次目标速度滤波 */
     g_speed_ctrl.target_speed = LPF_Update(&g_speed_ctrl.cmd_lpf, g_speed_ctrl.raw_target_speed);
 
-    /* 比例项使用等效反馈，积分项只跟随慢速趋势。 */
-    g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi,
-                                       g_speed_ctrl.target_speed,
-                                       g_speed_ctrl.filtered_speed,
-                                       g_speed_ctrl.trend_speed);
-
     /* 加速度前馈：对目标速度差分 */
     g_speed_ctrl.accel_ff = g_speed_ctrl.params->ff.acceleration_gain
                           * (g_speed_ctrl.target_speed - g_speed_ctrl.prev_target_speed)
@@ -339,15 +347,67 @@ float SpeedController_UpdateFromSpeed(float measured_speed)
         g_speed_ctrl.friction_ff = 0.0f;
     }
 
-    /* 总电流参考 = PI + 加速度前馈 + 负载前馈 + 摩擦前馈 */
+    ff_current = g_speed_ctrl.accel_ff
+               + g_speed_ctrl.load_ff
+               + g_speed_ctrl.friction_ff;
+    bemf_voltage = g_speed_ctrl.params->ff.Ke * g_speed_ctrl.target_speed;
+
+    /* 母线无效时冻结PI积分，避免恢复供电时产生积分冲击。 */
+    if (bus_voltage <= 0.0f) {
+        g_speed_ctrl.pi_output = 0.0f;
+        g_speed_ctrl.i_output = 0.0f;
+        g_speed_ctrl.total_output = 0.0f;
+        return 0.0f;
+    }
+
+    /* out_min/out_max约束PI与全部前馈之和，而不是只约束PI。 */
+    current_pi_max = g_speed_ctrl.pi.out_max - ff_current;
+    current_pi_min = g_speed_ctrl.pi.out_min - ff_current;
+    pi_max = current_pi_max;
+    pi_min = current_pi_min;
+
+    voltage_limit = bus_voltage * SVPWM_LINEAR_MODULATION_MAX;
+    if (g_speed_ctrl.inv_R > 0.0f) {
+        voltage_pi_max = (voltage_limit - bemf_voltage) * g_speed_ctrl.inv_R
+                       - ff_current;
+        voltage_pi_min = (-voltage_limit - bemf_voltage) * g_speed_ctrl.inv_R
+                       - ff_current;
+
+        if (current_pi_min > voltage_pi_max) {
+            /* 电压范围与电流范围不相交，选择最接近的总电流下限。 */
+            pi_min = current_pi_min;
+            pi_max = current_pi_min;
+        } else if (current_pi_max < voltage_pi_min) {
+            pi_min = current_pi_max;
+            pi_max = current_pi_max;
+        } else {
+            if (voltage_pi_max < pi_max) pi_max = voltage_pi_max;
+            if (voltage_pi_min > pi_min) pi_min = voltage_pi_min;
+        }
+    }
+
+    /* 比例项使用等效反馈，积分项只跟随慢速趋势。 */
+    g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi,
+                                       g_speed_ctrl.target_speed,
+                                       g_speed_ctrl.filtered_speed,
+                                       g_speed_ctrl.trend_speed,
+                                       pi_max,
+                                       pi_min);
+
+    /* 总模型电流 = PI + 加速度前馈 + 负载前馈 + 摩擦前馈。 */
     g_speed_ctrl.i_output = g_speed_ctrl.pi_output
-                          + g_speed_ctrl.accel_ff
-                          + g_speed_ctrl.load_ff
-                          + g_speed_ctrl.friction_ff;
+                          + ff_current;
 
     /* 电压输出 = i_output * R + Ke * ω_ref */
     g_speed_ctrl.total_output = g_speed_ctrl.i_output * g_speed_ctrl.params->ff.R
-                              + g_speed_ctrl.params->ff.Ke * g_speed_ctrl.target_speed;
+                              + bemf_voltage;
+
+    /* 反算边界无法满足时仍做最终安全限幅。 */
+    if (g_speed_ctrl.total_output > voltage_limit) {
+        g_speed_ctrl.total_output = voltage_limit;
+    } else if (g_speed_ctrl.total_output < -voltage_limit) {
+        g_speed_ctrl.total_output = -voltage_limit;
+    }
 
     return g_speed_ctrl.total_output;
 }

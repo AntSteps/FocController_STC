@@ -33,6 +33,7 @@
 void PWMA_Init(void);
 
 void PWM_UpdateDuty(uint8_t PWMx, uint16_t nCompare);
+void PWM_UpdateDutyABC(uint16_t duty_a, uint16_t duty_b, uint16_t duty_c);
 void HSPWM_UpdateDuty(uint8_t PWMx, uint16_t nCompare);
 uint16_t PWM_ReadCapture(uint8_t PWMx);
 uint16_t HSPWM_ReadCapture(uint8_t PWMx);

@@ -13,6 +13,7 @@
 
 void TIMER0_Init(void);
 void TIMER3_Init(void);
+void TIMER0_RunSynchronizedWithPWMA(void);
 uint32_t Timer_GetTickMs(void);
 
 #endif
