@@ -5,12 +5,14 @@
 #include "svpwm.h"
 #include "motor.h"
 #include "timer.h"
+#include "uart_controller.h"
+#include "telemetry_service.h"
 #include <string.h>
 
 #define CALIB_SERVICE_TWO_PI          6.28318530718f
 #define CALIB_SERVICE_VOLTAGE         0.50f
 #define CALIB_SERVICE_STEP_RAD        0.05f
-#define CALIB_SERVICE_STEP_DELAY_MS   10ul
+#define CALIB_SERVICE_STEP_DELAY_MS   20ul
 #define CALIB_SERVICE_LOCK_DELAY_MS   1000ul
 #define CALIB_SERVICE_SETTLE_DELAY_MS 500ul
 #define CALIB_SERVICE_MIN_RMS_RAD     0.001f
@@ -24,7 +26,9 @@ typedef enum
     CALIB_FLOW_DIR_SETTLE_WAIT = 4,
     CALIB_FLOW_FIT_SWEEP_SET = 5,
     CALIB_FLOW_FIT_SWEEP_WAIT = 6,
-    CALIB_FLOW_FINALIZE = 7
+    CALIB_FLOW_REVERSE_SWEEP_SET = 7,
+    CALIB_FLOW_REVERSE_SWEEP_WAIT = 8,
+    CALIB_FLOW_FINALIZE = 9
 } CalibrationFlowState;
 
 typedef struct
@@ -46,6 +50,7 @@ typedef struct
     float sum_sin_2;
     float sum_cos_2;
     int sample_count;
+    int8_t sweep_direction;
 } CalibrationServiceContext;
 
 static CalibrationServiceContext s_calib_ctx;
@@ -252,6 +257,7 @@ void CalibrationService_Poll(void)
         s_calib_ctx.sum_sin_2 = 0.0f;
         s_calib_ctx.sum_cos_2 = 0.0f;
         s_calib_ctx.sample_count = 0;
+        s_calib_ctx.sweep_direction = 1;
         s_calib_ctx.progress = 35u;
         s_calib_ctx.flow_state = CALIB_FLOW_FIT_SWEEP_SET;
         break;
@@ -259,12 +265,16 @@ void CalibrationService_Poll(void)
     case CALIB_FLOW_FIT_SWEEP_SET:
         if (s_calib_ctx.theta > s_calib_ctx.theta_end)
         {
-            s_calib_ctx.flow_state = CALIB_FLOW_FINALIZE;
+            s_calib_ctx.theta = s_calib_ctx.theta_end;
+            s_calib_ctx.sweep_direction = -1;
+            s_calib_ctx.progress = 65u;
+            s_calib_ctx.deadline_ms = now_ms + CALIB_SERVICE_SETTLE_DELAY_MS;
+            s_calib_ctx.flow_state = CALIB_FLOW_REVERSE_SWEEP_SET;
             break;
         }
 
         SVPWM_Update(s_calib_ctx.theta, CALIB_SERVICE_VOLTAGE);
-        CalibrationService_UpdateSweepProgress(35u, 95u, s_calib_ctx.theta, s_calib_ctx.theta_end);
+        CalibrationService_UpdateSweepProgress(35u, 65u, s_calib_ctx.theta, s_calib_ctx.theta_end);
         s_calib_ctx.deadline_ms = now_ms + CALIB_SERVICE_STEP_DELAY_MS;
         s_calib_ctx.flow_state = CALIB_FLOW_FIT_SWEEP_WAIT;
         break;
@@ -281,11 +291,13 @@ void CalibrationService_Poll(void)
             float mech_rad;
             float elec_raw;
             float diff;
+            float theta_ref;
 
             mech_rad = Encoder_Get_Angle();
             elec_raw = mech_rad * (float)s_calib_ctx.result.dir * (float)s_calib_ctx.pole_pairs;
             elec_raw = CalibrationService_Normalize0To2Pi(elec_raw);
-            diff = CalibrationService_NormalizePmPi(elec_raw - s_calib_ctx.theta);
+            theta_ref = CalibrationService_Normalize0To2Pi(s_calib_ctx.theta);
+            diff = CalibrationService_NormalizePmPi(elec_raw - theta_ref);
 
             s_calib_ctx.sum_diff += diff;
             s_calib_ctx.sum_diff_sq += diff * diff;
@@ -294,10 +306,81 @@ void CalibrationService_Poll(void)
             s_calib_ctx.sum_sin_2 += diff * (float)sin((double)(2.0f * mech_rad));
             s_calib_ctx.sum_cos_2 += diff * (float)cos((double)(2.0f * mech_rad));
             s_calib_ctx.sample_count++;
+
+            {
+                ProtocolReply sample_reply;
+                TelemetryService_BuildCalibSampleReply(&sample_reply,
+                                                       (uint16_t)s_calib_ctx.sample_count,
+                                                       s_calib_ctx.sweep_direction,
+                                                       s_calib_ctx.theta,
+                                                       mech_rad,
+                                                       diff);
+                (void)ProtocolController_SendReply(&sample_reply);
+            }
         }
 
         s_calib_ctx.theta += CALIB_SERVICE_STEP_RAD;
         s_calib_ctx.flow_state = CALIB_FLOW_FIT_SWEEP_SET;
+        break;
+
+    case CALIB_FLOW_REVERSE_SWEEP_SET:
+        if (s_calib_ctx.theta < 0.0f)
+        {
+            s_calib_ctx.flow_state = CALIB_FLOW_FINALIZE;
+            break;
+        }
+
+        SVPWM_Update(s_calib_ctx.theta, CALIB_SERVICE_VOLTAGE);
+        CalibrationService_UpdateSweepProgress(65u,
+                                               95u,
+                                               s_calib_ctx.theta_end - s_calib_ctx.theta,
+                                               s_calib_ctx.theta_end);
+        s_calib_ctx.deadline_ms = now_ms + CALIB_SERVICE_STEP_DELAY_MS;
+        s_calib_ctx.flow_state = CALIB_FLOW_REVERSE_SWEEP_WAIT;
+        break;
+
+    case CALIB_FLOW_REVERSE_SWEEP_WAIT:
+        Encoder_Update();
+        if (!Encoder_Get_DataGood())
+        {
+            CalibrationService_SetFailure(PROTOCOL_CALIB_STATE_FAIL_ENCODER);
+            return;
+        }
+
+        {
+            float mech_rad;
+            float elec_raw;
+            float theta_ref;
+            float diff;
+
+            mech_rad = Encoder_Get_Angle();
+            elec_raw = mech_rad * (float)s_calib_ctx.result.dir * (float)s_calib_ctx.pole_pairs;
+            elec_raw = CalibrationService_Normalize0To2Pi(elec_raw);
+            theta_ref = CalibrationService_Normalize0To2Pi(s_calib_ctx.theta);
+            diff = CalibrationService_NormalizePmPi(elec_raw - theta_ref);
+
+            s_calib_ctx.sum_diff += diff;
+            s_calib_ctx.sum_diff_sq += diff * diff;
+            s_calib_ctx.sum_sin_1 += diff * (float)sin((double)mech_rad);
+            s_calib_ctx.sum_cos_1 += diff * (float)cos((double)mech_rad);
+            s_calib_ctx.sum_sin_2 += diff * (float)sin((double)(2.0f * mech_rad));
+            s_calib_ctx.sum_cos_2 += diff * (float)cos((double)(2.0f * mech_rad));
+            s_calib_ctx.sample_count++;
+
+            {
+                ProtocolReply sample_reply;
+                TelemetryService_BuildCalibSampleReply(&sample_reply,
+                                                       (uint16_t)s_calib_ctx.sample_count,
+                                                       s_calib_ctx.sweep_direction,
+                                                       s_calib_ctx.theta,
+                                                       mech_rad,
+                                                       diff);
+                (void)ProtocolController_SendReply(&sample_reply);
+            }
+        }
+
+        s_calib_ctx.theta -= CALIB_SERVICE_STEP_RAD;
+        s_calib_ctx.flow_state = CALIB_FLOW_REVERSE_SWEEP_SET;
         break;
 
     case CALIB_FLOW_FINALIZE:

@@ -4,17 +4,17 @@
 #include "def.h"
 
 #ifndef DEVICE_ID
-#define DEVICE_ID                               0x01u           //设备id 在此指定
+#define DEVICE_ID                               0x03u           //设备id 在此指定
 #endif
 
 #define PROTOCOL_MAX_FRAME_SIZE                 128u
 #define PROTOCOL_PARAM_SNAPSHOT_VERSION         0x01u
-
 #define PROTOCOL_HEAD_ACK_REPLY                 0x0621u
 #define PROTOCOL_HEAD_STATE_REPLY               0x0721u
 #define PROTOCOL_HEAD_PARAM_VALUE_REPLY         0x0821u
 #define PROTOCOL_HEAD_PARAM_SNAPSHOT_REPLY      0x0921u
 #define PROTOCOL_HEAD_CALIB_STATUS_REPLY        0x0A21u
+#define PROTOCOL_HEAD_CALIB_SAMPLE_REPLY        0x0B21u
 
 #define PROTOCOL_HEAD_CTRL_CMD                  0x1145u
 #define PROTOCOL_HEAD_PARAM_WRITE_CMD           0x1245u
@@ -77,7 +77,8 @@ typedef enum
     PROTOCOL_REPLY_STATE = 2,
     PROTOCOL_REPLY_PARAM_VALUE = 3,
     PROTOCOL_REPLY_PARAM_SNAPSHOT = 4,
-    PROTOCOL_REPLY_CALIB_STATUS = 5
+    PROTOCOL_REPLY_CALIB_STATUS = 5,
+    PROTOCOL_REPLY_CALIB_SAMPLE = 6
 } ProtocolReplyKind;
 
 typedef enum
@@ -242,6 +243,19 @@ typedef struct
     uint8_t seq;
     uint8_t crc8;
 } CalibStatusReplyFrame;
+
+typedef struct
+{
+    uint16_t head;
+    uint8_t id;
+    uint16_t sample_index;
+    int8_t direction;
+    float command_theta;
+    float mechanical_angle;
+    float electrical_error;
+    uint8_t seq;
+    uint8_t crc8;
+} CalibSampleReplyFrame;
 #pragma pack()
 
 typedef struct
@@ -278,6 +292,11 @@ typedef struct
     ParamSnapshotPayload payload;
     uint8_t calib_state;
     uint8_t progress;
+    uint16_t calib_sample_index;
+    int8_t calib_sample_direction;
+    float calib_sample_theta;
+    float calib_sample_mechanical_angle;
+    float calib_sample_error;
 } ProtocolReply;
 
 BOOL ProtocolFrame_FindRequestLength(uint8_t head_byte0, uint8_t head_byte1, uint8_t *frame_len);

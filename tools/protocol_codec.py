@@ -9,6 +9,7 @@ STATE_REPLY_HEAD = 0x0721
 PARAM_VALUE_REPLY_HEAD = 0x0821
 PARAM_SNAPSHOT_REPLY_HEAD = 0x0921
 CALIB_STATUS_REPLY_HEAD = 0x0A21
+CALIB_SAMPLE_REPLY_HEAD = 0x0B21
 
 CTRL_CMD_HEAD = 0x1145
 PARAM_WRITE_CMD_HEAD = 0x1245
@@ -63,8 +64,9 @@ CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
 ACK_REPLY_FRAME_FORMAT = ">HBBBBB"
 STATE_REPLY_FRAME_FORMAT = ">HBBfffffBBB"
 PARAM_VALUE_REPLY_FRAME_FORMAT = ">HBBfBB"
-PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffffhhhffffffBB"
+PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffffffhhhfffffBB"
 CALIB_STATUS_REPLY_FRAME_FORMAT = ">HBBBBB"
+CALIB_SAMPLE_REPLY_FRAME_FORMAT = ">HBHbfffBB"
 
 CTRL_CMD_FRAME_SIZE = struct.calcsize(CTRL_CMD_FRAME_FORMAT)
 PARAM_WRITE_CMD_FRAME_SIZE = struct.calcsize(PARAM_WRITE_CMD_FRAME_FORMAT)
@@ -76,6 +78,7 @@ STATE_REPLY_FRAME_SIZE = struct.calcsize(STATE_REPLY_FRAME_FORMAT)
 PARAM_VALUE_REPLY_FRAME_SIZE = struct.calcsize(PARAM_VALUE_REPLY_FRAME_FORMAT)
 PARAM_SNAPSHOT_REPLY_FRAME_SIZE = struct.calcsize(PARAM_SNAPSHOT_REPLY_FRAME_FORMAT)
 CALIB_STATUS_REPLY_FRAME_SIZE = struct.calcsize(CALIB_STATUS_REPLY_FRAME_FORMAT)
+CALIB_SAMPLE_REPLY_FRAME_SIZE = struct.calcsize(CALIB_SAMPLE_REPLY_FRAME_FORMAT)
 
 DEFAULT_BAUDRATE = 1_000_000
 
@@ -92,6 +95,7 @@ REPLY_FRAME_SPECS = {
     PARAM_VALUE_REPLY_HEAD: (PARAM_VALUE_REPLY_FRAME_SIZE, "PARAM"),
     PARAM_SNAPSHOT_REPLY_HEAD: (PARAM_SNAPSHOT_REPLY_FRAME_SIZE, "SNAPSHOT"),
     CALIB_STATUS_REPLY_HEAD: (CALIB_STATUS_REPLY_FRAME_SIZE, "CALIB"),
+    CALIB_SAMPLE_REPLY_HEAD: (CALIB_SAMPLE_REPLY_FRAME_SIZE, "CALIB_SAMPLE"),
 }
 
 CONTROL_MODE_SUMMARY_LABELS = {
@@ -355,6 +359,27 @@ def decode_calib_status_reply(data):
     }
 
 
+def decode_calib_sample_reply(data):
+    values = unpack_frame(
+        CALIB_SAMPLE_REPLY_FRAME_FORMAT,
+        data,
+        CALIB_SAMPLE_REPLY_HEAD,
+        "CalibSampleReply",
+    )
+    return {
+        "kind": "calib_sample",
+        "head": CALIB_SAMPLE_REPLY_HEAD,
+        "motor_id": int(values[1]),
+        "sample_index": int(values[2]),
+        "direction": int(values[3]),
+        "command_theta": float(values[4]),
+        "mechanical_angle": float(values[5]),
+        "electrical_error": float(values[6]),
+        "seq": int(values[7]),
+        "crc8": int(values[8]),
+    }
+
+
 def decode_reply_frame(data):
     if len(data) < 2:
         raise ValueError("回复帧长度不足")
@@ -370,4 +395,6 @@ def decode_reply_frame(data):
         return decode_param_snapshot_reply(data)
     if head == CALIB_STATUS_REPLY_HEAD:
         return decode_calib_status_reply(data)
+    if head == CALIB_SAMPLE_REPLY_HEAD:
+        return decode_calib_sample_reply(data)
     raise ValueError("未知回复帧头: 0x%04X" % head)

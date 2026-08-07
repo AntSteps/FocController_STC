@@ -67,8 +67,8 @@ static void SetDefaultValues(void)
 
 
     // 速度环默认参数
-    s_param_data.speed_ctrl_params.kp = 0.015f;
-    s_param_data.speed_ctrl_params.ki = 0.001f;
+    s_param_data.speed_ctrl_params.kp = 0.05f;
+    s_param_data.speed_ctrl_params.ki = 0.0015f;
     s_param_data.speed_ctrl_params.beta = 0.5f;  /* 二自由度系数 */
     s_param_data.speed_ctrl_params.out_max = 1.0f;
     s_param_data.speed_ctrl_params.out_min = -1.0f;

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from collections import deque
 import numpy as np
 from dataclasses import dataclass, field
@@ -43,6 +44,7 @@ from protocol_codec import (
 from protocol_service import (
     AckReply,
     CalibStatusReply,
+    CalibSampleReply,
     DEFAULT_BAUDRATE,
     DEFAULT_CALIB_POLL_HZ,
     DEFAULT_POLL_HZ,
@@ -418,6 +420,8 @@ class FOCGuiApp:
         self.font_status = "未加载中文字体"
         self.next_state_poll_at = 0.0
         self.next_calib_poll_at = 0.0
+        self.calib_samples: List[CalibSampleReply] = []
+        self.calib_samples_saved = False
 
         self.tags = {
             "port_combo": "port_combo",
@@ -1031,6 +1035,8 @@ class FOCGuiApp:
         )
 
     def send_calibration_start(self) -> None:
+        self.calib_samples.clear()
+        self.calib_samples_saved = False
         motor_id = self._selected_motor_id()
         seq = self._next_seq()
         self._schedule_user_command(
@@ -1181,6 +1187,12 @@ class FOCGuiApp:
                 f"CALIB ID={reply.motor_id} seq={reply.seq} "
                 f"state={state_name} progress={reply.progress}%"
             )
+        if isinstance(reply, CalibSampleReply):
+            return (
+                f"CALIB_SAMPLE index={reply.sample_index} dir={reply.direction} "
+                f"theta={reply.command_theta:.4f} mech={reply.mechanical_angle:.4f} "
+                f"err={reply.electrical_error:.5f}"
+            )
         return "未知回复"
 
     def _handle_rx_event(self, payload: object) -> None:
@@ -1189,7 +1201,7 @@ class FOCGuiApp:
 
         reply = payload.get("reply")
         raw = payload.get("payload", b"")
-        if not isinstance(reply, (AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply)):
+        if not isinstance(reply, (AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply, CalibSampleReply)):
             return
 
         self.state.reply_count += 1
@@ -1222,9 +1234,37 @@ class FOCGuiApp:
             self.state.last_snapshot = reply
         elif isinstance(reply, CalibStatusReply):
             self.state.last_calib = reply
+            if reply.calib_state != CALIB_STATE_RUNNING and self.calib_samples and not self.calib_samples_saved:
+                self._save_calibration_samples()
+        elif isinstance(reply, CalibSampleReply):
+            self.calib_samples.append(reply)
 
         self._append_log("RX", f"{summary} | {format_hex(raw)}")
         self._refresh_live_values()
+
+    def _save_calibration_samples(self) -> None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        path = Path.cwd() / f"calibration_samples_{timestamp}.csv"
+        try:
+            with path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.writer(stream)
+                writer.writerow([
+                    "motor_id", "sample_index", "direction", "command_theta",
+                    "mechanical_angle", "electrical_error",
+                ])
+                for sample in self.calib_samples:
+                    writer.writerow([
+                        sample.motor_id,
+                        sample.sample_index,
+                        sample.direction,
+                        f"{sample.command_theta:.9f}",
+                        f"{sample.mechanical_angle:.9f}",
+                        f"{sample.electrical_error:.9f}",
+                    ])
+            self._append_log("SYS", f"已保存校准采样 {len(self.calib_samples)} 点: {path}")
+            self.calib_samples_saved = True
+        except OSError as exc:
+            self._append_log("ERR", f"保存校准采样失败: {exc}")
 
     def _refresh_stats_only(self) -> None:
         dpg.set_value(self.tags["reply_count"], str(self.state.reply_count))

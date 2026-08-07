@@ -112,7 +112,9 @@ void Motor_Update(void)
             {
                 s_pid_counter = 0u;
                 /* 电压→占空比：Vout / Vbus */
-                s_q_axis_voltage = SpeedController_Update(s_cached_angle) / ADC_GetBusVoltage();
+                s_q_axis_voltage = SpeedController_Update(
+                    Motor_Calibration_GetMechanicalAngle(s_cached_angle)) / ADC_GetBusVoltage();
+                    //   s_q_axis_voltage = SpeedController_Update(s_cached_angle) / ADC_GetBusVoltage();
             }
         }
         else

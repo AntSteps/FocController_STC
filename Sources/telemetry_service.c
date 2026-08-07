@@ -101,3 +101,19 @@ void TelemetryService_BuildCalibStatusReply(ProtocolReply *reply, uint8_t seq, u
     reply->calib_state = calib_state;
     reply->progress = progress;
 }
+
+void TelemetryService_BuildCalibSampleReply(ProtocolReply *reply,
+                                            uint16_t sample_index,
+                                            int8_t direction,
+                                            float command_theta,
+                                            float mechanical_angle,
+                                            float electrical_error)
+{
+    memset(reply, 0, sizeof(ProtocolReply));
+    reply->kind = PROTOCOL_REPLY_CALIB_SAMPLE;
+    reply->calib_sample_index = sample_index;
+    reply->calib_sample_direction = direction;
+    reply->calib_sample_theta = command_theta;
+    reply->calib_sample_mechanical_angle = mechanical_angle;
+    reply->calib_sample_error = electrical_error;
+}

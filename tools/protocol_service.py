@@ -18,6 +18,7 @@ from protocol_codec import (
     CALIB_CMD_START_AUTO,
     CALIB_CMD_SUMMARY_LABELS,
     CALIB_STATUS_REPLY_HEAD,
+    CALIB_SAMPLE_REPLY_HEAD,
     CONTROL_MODE_SUMMARY_LABELS,
     CTRL_CMD_FRAME_SIZE,
     CTRL_CMD_HEAD,
@@ -41,6 +42,7 @@ from protocol_codec import (
     build_query_frame,
     decode_ack_reply,
     decode_calib_status_reply,
+    decode_calib_sample_reply,
     decode_param_snapshot_reply,
     decode_param_value_reply,
     decode_state_reply,
@@ -334,7 +336,34 @@ class CalibStatusReply:
         )
 
 
-ParsedReply = Union[AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply]
+@dataclass
+class CalibSampleReply:
+    motor_id: int
+    sample_index: int
+    direction: int
+    command_theta: float
+    mechanical_angle: float
+    electrical_error: float
+    seq: int
+    crc8: int
+    head: int = CALIB_SAMPLE_REPLY_HEAD
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "CalibSampleReply":
+        values = decode_calib_sample_reply(data)
+        return cls(
+            motor_id=int(values["motor_id"]),
+            sample_index=int(values["sample_index"]),
+            direction=int(values["direction"]),
+            command_theta=float(values["command_theta"]),
+            mechanical_angle=float(values["mechanical_angle"]),
+            electrical_error=float(values["electrical_error"]),
+            seq=int(values["seq"]),
+            crc8=int(values["crc8"]),
+        )
+
+
+ParsedReply = Union[AckReply, StateReply, ParamValueReply, ParamSnapshotReply, CalibStatusReply, CalibSampleReply]
 
 
 @dataclass
@@ -463,7 +492,7 @@ class SerialWorker:
         return -1
 
     def _keep_possible_header_prefix(self) -> int:
-        if self._buffer and int(self._buffer[-1]) in (0x06, 0x07, 0x08, 0x09, 0x0A):
+        if self._buffer and int(self._buffer[-1]) in (0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B):
             last_byte = self._buffer[-1]
             self._buffer.clear()
             self._buffer.append(last_byte)
@@ -486,6 +515,8 @@ class SerialWorker:
             return ParamSnapshotReply.from_bytes(frame_bytes)
         if head == CALIB_STATUS_REPLY_HEAD:
             return CalibStatusReply.from_bytes(frame_bytes)
+        if head == CALIB_SAMPLE_REPLY_HEAD:
+            return CalibSampleReply.from_bytes(frame_bytes)
         raise ValueError(f"未知回复帧头: 0x{head:04X}")
 
     def _process_rx_buffer(self) -> None:

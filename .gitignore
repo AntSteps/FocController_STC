@@ -4,4 +4,7 @@ Listings
 *.uvopt
 *.uvgui.*
 .ccls-cache
-__pycache__
+__pycache_
+tools/__pycache__
+calibration*.csv
+calibration*.png

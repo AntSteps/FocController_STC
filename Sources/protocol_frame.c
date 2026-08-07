@@ -210,6 +210,19 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         frame[6] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
         break;
 
+    case PROTOCOL_REPLY_CALIB_SAMPLE:
+        len = sizeof(CalibSampleReplyFrame);
+        ProtocolFrame_WriteU16BE(&frame[0], PROTOCOL_HEAD_CALIB_SAMPLE_REPLY);
+        frame[2] = DEVICE_ID;
+        ProtocolFrame_WriteU16BE(&frame[3], reply->calib_sample_index);
+        frame[5] = (uint8_t)reply->calib_sample_direction;
+        ProtocolFrame_WriteFloatRaw(&frame[6], reply->calib_sample_theta);
+        ProtocolFrame_WriteFloatRaw(&frame[10], reply->calib_sample_mechanical_angle);
+        ProtocolFrame_WriteFloatRaw(&frame[14], reply->calib_sample_error);
+        frame[18] = 0u;
+        frame[19] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        break;
+
     default:
         return FALSE;
     }
