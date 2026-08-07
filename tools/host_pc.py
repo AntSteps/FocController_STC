@@ -324,7 +324,7 @@ class AppConfig:
             ChoiceOption(0x12, "相电感"),
             ChoiceOption(0x15, "速度输出上限"),
             ChoiceOption(0x16, "速度输出下限"),
-            ChoiceOption(0x17, "速度滤波常数"),
+            ChoiceOption(0x17, "速度趋势滤波常数"),
             ChoiceOption(0x18, "加速度前馈"),
             ChoiceOption(0x19, "摩擦补偿"),
             ChoiceOption(0x1B, "二自由度系数"),
@@ -334,6 +334,8 @@ class AppConfig:
             ChoiceOption(0x1F, "相电阻前馈 (R)"),
             ChoiceOption(0x20, "编码器偏移"),
             ChoiceOption(0x21, "反电动势系数 (Ke)"),
+            ChoiceOption(0x22, "速度残差保留系数"),
+            ChoiceOption(0x23, "速度残差软死区"),
             ChoiceOption(0x30, "校准极对数"),
             ChoiceOption(0x31, "校准方向"),
             ChoiceOption(0x32, "电角零位偏移"),
@@ -753,7 +755,7 @@ class FOCGuiApp:
                 self._add_kv_row("电机 ID", self.tags["value_motor_id"], "-")
                 self._add_kv_row("控制模式", self.tags["value_mode"], "-")
                 self._add_kv_row("目标值", self.tags["value_target"], "-")
-                self._add_kv_row("速度", self.tags["value_velocity"], "-")
+                self._add_kv_row("速度环输入速度", self.tags["value_velocity"], "-")
                 self._add_kv_row("输出", self.tags["value_output"], "-")
                 self._add_kv_row("位置", self.tags["value_position"], "-")
                 self._add_kv_row("电压", self.tags["value_voltage"], "-")
@@ -782,8 +784,8 @@ class FOCGuiApp:
                 callback=lambda s, v: setattr(self, "plot_paused", v),
             )
             self._create_dual_plot(
-                "速度环跟踪",
-                "速度 (rad/s)",
+                "速度环输入",
+                "输入速度 (rad/s)",
                 "输出 (duty)",
                 self.tags["velocity_series"],
                 self.tags["output_series"],
@@ -808,7 +810,7 @@ class FOCGuiApp:
                 dpg.add_plot_legend()
                 fft_x = dpg.add_plot_axis(dpg.mvXAxis, label="频率 (Hz)", tag=self.tags["fft_x_axis"])
                 fft_y = dpg.add_plot_axis(dpg.mvYAxis, label="幅值", tag=self.tags["fft_y_axis"])
-                dpg.add_line_series([], [], label="速度 FFT", parent=fft_y, tag=self.tags["fft_series"])
+                dpg.add_line_series([], [], label="输入速度 FFT", parent=fft_y, tag=self.tags["fft_series"])
                 dpg.set_axis_limits_auto(fft_y)
 
     def _build_log_panel(self) -> None:

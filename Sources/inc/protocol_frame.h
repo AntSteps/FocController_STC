@@ -8,7 +8,7 @@
 #endif
 
 #define PROTOCOL_MAX_FRAME_SIZE                 128u
-#define PROTOCOL_PARAM_SNAPSHOT_VERSION         0x01u
+#define PROTOCOL_PARAM_SNAPSHOT_VERSION         0x02u
 #define PROTOCOL_HEAD_ACK_REPLY                 0x0621u
 #define PROTOCOL_HEAD_STATE_REPLY               0x0721u
 #define PROTOCOL_HEAD_PARAM_VALUE_REPLY         0x0821u
@@ -52,6 +52,8 @@
 #define PROTOCOL_PARAM_ID_PLL_ZETA              0x1Eu  /* PLL阻尼比 */
 #define PROTOCOL_PARAM_ID_SPEED_R               0x1Fu  /* 相电阻前馈 (Ohm) */
 #define PROTOCOL_PARAM_ID_SPEED_KE              0x21u  /* 反电动势系数 (V/(rad/s)) */
+#define PROTOCOL_PARAM_ID_SPEED_RESIDUAL_RHO    0x22u  /* 小残差保留系数 (0~1) */
+#define PROTOCOL_PARAM_ID_SPEED_RESIDUAL_DB     0x23u  /* 残差软死区 (rad/s) */
 #define PROTOCOL_PARAM_ID_ENCODER_OFFSET        0x20u
 #define PROTOCOL_PARAM_ID_CALIB_POLE_PAIRS      0x30u
 #define PROTOCOL_PARAM_ID_CALIB_DIR             0x31u
@@ -203,7 +205,7 @@ typedef struct
     float speed_ki;
     float speed_out_max;
     float speed_out_min;
-    float speed_lpf_time_constant_ms;
+    float speed_lpf_time_constant_ms; /* 速度趋势滤波时间常数(ms) */
     float ff_acceleration_gain;
     float ff_friction_compensation;
     float speed_beta;               /* 二自由度系数 */
@@ -212,6 +214,8 @@ typedef struct
     float pll_zeta;                 /* PLL阻尼比 */
     float speed_R;                  /* 相电阻前馈 (Ohm) */
     float speed_Ke;                 /* 反电动势系数 (V/(rad/s)) */
+    float speed_residual_rho;       /* 小残差保留系数 (0~1) */
+    float speed_residual_deadband;  /* 残差软死区 (rad/s) */
 
     float velocity_limit;
     int16_t encoder_offset;

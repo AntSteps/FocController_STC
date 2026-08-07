@@ -64,7 +64,7 @@ CALIB_CMD_FRAME_FORMAT = ">HBBBBB"
 ACK_REPLY_FRAME_FORMAT = ">HBBBBB"
 STATE_REPLY_FRAME_FORMAT = ">HBBfffffBBB"
 PARAM_VALUE_REPLY_FRAME_FORMAT = ">HBBfBB"
-PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffffffhhhfffffBB"
+PARAM_SNAPSHOT_REPLY_FRAME_FORMAT = ">HBBhffffffffffffffffffhhhfffffBB"
 CALIB_STATUS_REPLY_FRAME_FORMAT = ">HBBBBB"
 CALIB_SAMPLE_REPLY_FRAME_FORMAT = ">HBHbfffBB"
 
@@ -326,18 +326,20 @@ def decode_param_snapshot_reply(data):
             "pll_zeta": float(values[16]),
             "speed_R": float(values[17]),
             "speed_Ke": float(values[18]),
-            "velocity_limit": float(values[19]),
-            "encoder_offset": int(values[20]),
-            "calib_pole_pairs": int(values[21]),
-            "calib_dir": int(values[22]),
-            "calib_electrical_offset_rad": float(values[23]),
-            "calib_harmonic_amp_1": float(values[24]),
-            "calib_harmonic_phase_1": float(values[25]),
-            "calib_harmonic_amp_2": float(values[26]),
-            "calib_harmonic_phase_2": float(values[27]),
+            "speed_residual_rho": float(values[19]),
+            "speed_residual_deadband": float(values[20]),
+            "velocity_limit": float(values[21]),
+            "encoder_offset": int(values[22]),
+            "calib_pole_pairs": int(values[23]),
+            "calib_dir": int(values[24]),
+            "calib_electrical_offset_rad": float(values[25]),
+            "calib_harmonic_amp_1": float(values[26]),
+            "calib_harmonic_phase_1": float(values[27]),
+            "calib_harmonic_amp_2": float(values[28]),
+            "calib_harmonic_phase_2": float(values[29]),
         },
-        "seq": int(values[28]),
-        "crc8": int(values[29]),
+        "seq": int(values[30]),
+        "crc8": int(values[31]),
     }
 
 

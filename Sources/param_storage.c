@@ -67,15 +67,17 @@ static void SetDefaultValues(void)
 
 
     // 速度环默认参数
-    s_param_data.speed_ctrl_params.kp = 0.05f;
+    s_param_data.speed_ctrl_params.kp = 0.02f;
     s_param_data.speed_ctrl_params.ki = 0.0015f;
     s_param_data.speed_ctrl_params.beta = 0.5f;  /* 二自由度系数 */
     s_param_data.speed_ctrl_params.out_max = 1.0f;
     s_param_data.speed_ctrl_params.out_min = -1.0f;
-    s_param_data.speed_ctrl_params.lpf_time_constant_ms = 100.0f;
+    s_param_data.speed_ctrl_params.lpf_time_constant_ms = 160.0f; /* 约1Hz趋势低通 */
     s_param_data.speed_ctrl_params.cmd_lpf_time_constant_ms = 10.0f;  /* 命令整形滤波*/
-    s_param_data.speed_ctrl_params.pll_bandwidth_hz = 10.0f;   /* PLL带宽，默认25Hz */
-    s_param_data.speed_ctrl_params.pll_zeta = 0.707f;          /* PLL阻尼比，默认0.707 */
+    s_param_data.speed_ctrl_params.pll_bandwidth_hz = 30.0f;
+    s_param_data.speed_ctrl_params.pll_zeta = 0.707f;
+    s_param_data.speed_ctrl_params.residual_rho = 0.25f;
+    s_param_data.speed_ctrl_params.residual_deadband = 2.3f;   /* rad/s */
     s_param_data.speed_ctrl_params.ff.acceleration_gain = 0.0f;
     s_param_data.speed_ctrl_params.ff.friction_compensation = 0.023f;
     s_param_data.speed_ctrl_params.ff.R = 6.2f;        /* 相电阻前馈 */

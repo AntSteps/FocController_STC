@@ -14,7 +14,7 @@
 #define PARAM_STORAGE_MAGIC         0x5A5A
 
 // 参数版本号，数据结构改变时需要更新
-#define PARAM_STORAGE_VERSION       0x0003
+#define PARAM_STORAGE_VERSION       0x0004
 
 
 ////////////////////////////////////////

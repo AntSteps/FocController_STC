@@ -75,11 +75,11 @@ void PI_Reset(PI_Controller_t *pi)
     pi->output = 0.0f;
 }
 
-float PI_Update(PI_Controller_t *pi, float ref, float feedback)
+float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback)
 {
     float p_term, i_term, output;
-    float error_i = ref - feedback;         /* 积分项误差 */
-    float error_p = pi->beta * ref - feedback;  /* 比例项误差（二自由度加权） */
+    float error_i = ref - i_feedback;             /* 积分项只跟随趋势速度 */
+    float error_p = pi->beta * ref - p_feedback;  /* 比例项使用非线性等效反馈 */
 
     /* 比例项 */
     p_term = pi->kp * error_p;
@@ -183,7 +183,8 @@ void SpeedController_Init(SpeedController_Params_t *params)
 
     /* 初始化子模块 */
     PI_Init(&g_speed_ctrl.pi, params->kp, params->ki, params->beta, params->out_max, params->out_min);
-    LPF_Init(&g_speed_ctrl.speed_lpf, params->lpf_time_constant_ms, SPEED_OBSERVER_SAMPLE_FREQ_HZ);
+    LPF_Init(&g_speed_ctrl.observer_lpf, params->lpf_time_constant_ms, SPEED_OBSERVER_SAMPLE_FREQ_HZ);
+    LPF_Init(&g_speed_ctrl.trend_lpf, params->lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
     LPF_Init(&g_speed_ctrl.cmd_lpf, params->cmd_lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
 
     /* 初始化状态 */
@@ -191,6 +192,8 @@ void SpeedController_Init(SpeedController_Params_t *params)
     g_speed_ctrl.raw_target_speed = 0.0f;
     g_speed_ctrl.cmd_lpf.output = g_speed_ctrl.target_speed;
     g_speed_ctrl.cmd_lpf.init_done = 1;
+    g_speed_ctrl.fast_speed = 0.0f;
+    g_speed_ctrl.trend_speed = 0.0f;
     g_speed_ctrl.filtered_speed = 0.0f;
     g_speed_ctrl.last_angle = 0.0f;
     g_speed_ctrl.angle_initialized = 0;
@@ -261,7 +264,7 @@ float SpeedController_UpdateObserver(float mechanical_angle)
             } else if (delta_angle < -PI) {
                 delta_angle += TWO_PI;
             }
-            speed = LPF_Update(&g_speed_ctrl.speed_lpf,
+            speed = LPF_Update(&g_speed_ctrl.observer_lpf,
                                delta_angle * SPEED_OBSERVER_SAMPLE_FREQ_HZ);
         }
         #endif
@@ -289,13 +292,37 @@ BOOL SpeedController_TryGetAveragedSpeed(float *averaged_speed)
 
 float SpeedController_UpdateFromSpeed(float measured_speed)
 {
-    g_speed_ctrl.filtered_speed = measured_speed;
+    float residual;
+    float shaped_residual;
+    float residual_rho;
+    float residual_deadband;
+
+    g_speed_ctrl.fast_speed = measured_speed;
+    g_speed_ctrl.trend_speed = LPF_Update(&g_speed_ctrl.trend_lpf, measured_speed);
+
+    residual = g_speed_ctrl.trend_speed - measured_speed;
+    residual_rho = g_speed_ctrl.params->residual_rho;
+    residual_deadband = g_speed_ctrl.params->residual_deadband;
+
+    if (residual > residual_deadband) {
+        shaped_residual = residual - (1.0f - residual_rho) * residual_deadband;
+    } else if (residual < -residual_deadband) {
+        shaped_residual = residual + (1.0f - residual_rho) * residual_deadband;
+    } else {
+        shaped_residual = residual_rho * residual;
+    }
+
+    /* target - filtered_speed 等于趋势误差加非线性残差。 */
+    g_speed_ctrl.filtered_speed = g_speed_ctrl.trend_speed - shaped_residual;
 
     /* 命令整形：每个速度环周期推进一次目标速度滤波 */
     g_speed_ctrl.target_speed = LPF_Update(&g_speed_ctrl.cmd_lpf, g_speed_ctrl.raw_target_speed);
 
-    /* PI 计算（二自由度：比例项使用 β*ref - feedback，积分项使用 ref - feedback） */
-    g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi, g_speed_ctrl.target_speed, g_speed_ctrl.filtered_speed);
+    /* 比例项使用等效反馈，积分项只跟随慢速趋势。 */
+    g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi,
+                                       g_speed_ctrl.target_speed,
+                                       g_speed_ctrl.filtered_speed,
+                                       g_speed_ctrl.trend_speed);
 
     /* 加速度前馈：对目标速度差分 */
     g_speed_ctrl.accel_ff = g_speed_ctrl.params->ff.acceleration_gain
@@ -328,8 +355,11 @@ float SpeedController_UpdateFromSpeed(float measured_speed)
 void SpeedController_Reset(void)
 {
     PI_Reset(&g_speed_ctrl.pi);
-    LPF_Reset(&g_speed_ctrl.speed_lpf);
+    LPF_Reset(&g_speed_ctrl.observer_lpf);
+    LPF_Reset(&g_speed_ctrl.trend_lpf);
     g_speed_ctrl.angle_initialized = 0;
+    g_speed_ctrl.fast_speed = 0.0f;
+    g_speed_ctrl.trend_speed = 0.0f;
     g_speed_ctrl.filtered_speed = 0.0f;
     g_speed_ctrl.last_angle = 0.0f;
     g_speed_ctrl.observer_speed_sum = 0.0f;

@@ -226,6 +226,8 @@ class ParamSnapshot:
     pll_zeta: float
     speed_R: float
     speed_Ke: float
+    speed_residual_rho: float
+    speed_residual_deadband: float
     velocity_limit: float
     encoder_offset: int
     calib_pole_pairs: int
@@ -245,7 +247,7 @@ class ParamSnapshot:
             f"speed_ki = {self.speed_ki:.6f}",
             f"speed_out_max = {self.speed_out_max:.6f}",
             f"speed_out_min = {self.speed_out_min:.6f}",
-            f"speed_lpf_time_constant_ms = {self.speed_lpf_time_constant_ms:.6f}",
+            f"speed_trend_lpf_time_constant_ms = {self.speed_lpf_time_constant_ms:.6f}",
             f"ff_acceleration_gain = {self.ff_acceleration_gain:.6f}",
             f"ff_friction_compensation = {self.ff_friction_compensation:.6f}",
             f"speed_beta = {self.speed_beta:.6f}",
@@ -254,6 +256,8 @@ class ParamSnapshot:
             f"pll_zeta = {self.pll_zeta:.6f}",
             f"speed_R = {self.speed_R:.6f}",
             f"speed_Ke = {self.speed_Ke:.6f}",
+            f"speed_residual_rho = {self.speed_residual_rho:.6f}",
+            f"speed_residual_deadband = {self.speed_residual_deadband:.6f}",
             f"velocity_limit = {self.velocity_limit:.6f}",
             f"encoder_offset = {self.encoder_offset}",
             f"calib_pole_pairs = {self.calib_pole_pairs}",
@@ -296,6 +300,8 @@ class ParamSnapshotReply:
             pll_zeta=float(snapshot_values["pll_zeta"]),
             speed_R=float(snapshot_values["speed_R"]),
             speed_Ke=float(snapshot_values["speed_Ke"]),
+            speed_residual_rho=float(snapshot_values["speed_residual_rho"]),
+            speed_residual_deadband=float(snapshot_values["speed_residual_deadband"]),
             velocity_limit=float(snapshot_values["velocity_limit"]),
             encoder_offset=int(snapshot_values["encoder_offset"]),
             calib_pole_pairs=int(snapshot_values["calib_pole_pairs"]),

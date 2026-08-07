@@ -54,8 +54,8 @@ typedef struct {
 void PI_Init(PI_Controller_t *pi, float kp, float ki, float beta, float out_max, float out_min);
 // 重置PI控制器（清除积分）
 void PI_Reset(PI_Controller_t *pi);
-// 更新PI控制器，传入参考值和反馈值，返回输出
-float PI_Update(PI_Controller_t *pi, float ref, float feedback);
+// 更新PI控制器，比例项和积分项可使用不同的反馈速度
+float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback);
 
 
 /*------------------------------------------
@@ -112,7 +112,7 @@ typedef struct {
     float out_min;              /* 输出下限 */
 
     /* 滤波器参数 */
-    float lpf_time_constant_ms; /* 速度反馈滤波时间常数(ms) */
+    float lpf_time_constant_ms; /* 速度趋势滤波时间常数(ms) */
     float cmd_lpf_time_constant_ms; /* 命令整形滤波时间常数(ms)，0表示不滤波 */
 
     /* 前馈参数 */
@@ -121,6 +121,10 @@ typedef struct {
     /* PLL观测器参数 */
     float pll_bandwidth_hz;     /* PLL环路带宽(Hz) */
     float pll_zeta;             /* PLL阻尼比 */
+
+    /* 非线性残差旁路参数 */
+    float residual_rho;         /* 小残差保留系数(0~1) */
+    float residual_deadband;    /* 残差软死区(rad/s) */
 } SpeedController_Params_t;
 
 
@@ -130,7 +134,8 @@ typedef struct {
 typedef struct {
     /* 子模块 */
     PI_Controller_t pi;
-    LowPassFilter_t speed_lpf;
+    LowPassFilter_t observer_lpf; /* 差分测速模式的速度滤波器 */
+    LowPassFilter_t trend_lpf;    /* 速度环趋势滤波器 */
     LowPassFilter_t cmd_lpf;    /* 命令整形滤波器 */
 
     /* 配置参数（指针引用，生命周期由调用者保证） */
@@ -139,7 +144,9 @@ typedef struct {
     /* 运行状态 */
     float target_speed;         /* 目标速度（命令整形后） */
     float raw_target_speed;     /* 原始目标速度（整形前） */
-    float filtered_speed;       /* 滤波后速度 */
+    float fast_speed;           /* PLL降采样后的快速速度 */
+    float trend_speed;          /* 低通后的趋势速度 */
+    float filtered_speed;       /* 最终进入比例速度环的等效反馈速度 */
     float last_angle;           /* 上次角度（用于差分） */
     uint8 angle_initialized;    /* 角度初始化标志 */
     float observer_speed_sum;   /* 高频观测速度的降采样前累加值 */

@@ -60,6 +60,8 @@ static const ParamRegistryEntry s_param_table[] =
     { PROTOCOL_PARAM_ID_PLL_ZETA,             PARAM_OFFSET(speed_ctrl_params.pll_zeta),                   PARAM_VALUE_FLOAT, 0.1f,      2.0f,     PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_R,              PARAM_OFFSET(speed_ctrl_params.ff.R),                       PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_KE,             PARAM_OFFSET(speed_ctrl_params.ff.Ke),                      PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
+    { PROTOCOL_PARAM_ID_SPEED_RESIDUAL_RHO,   PARAM_OFFSET(speed_ctrl_params.residual_rho),              PARAM_VALUE_FLOAT, 0.0f,      1.0f,     PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
+    { PROTOCOL_PARAM_ID_SPEED_RESIDUAL_DB,    PARAM_OFFSET(speed_ctrl_params.residual_deadband),         PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_ENCODER_OFFSET,       PARAM_OFFSET(encoder_offset),                               PARAM_VALUE_INT16, -32768.0f, 32767.0f, PARAM_RULE_NONE,          PARAM_APPLY_NONE },
     { PROTOCOL_PARAM_ID_CALIB_POLE_PAIRS,     PARAM_OFFSET(motor_calib.pole_pairs),                       PARAM_VALUE_INT16, 1.0f,      64.0f,    PARAM_RULE_NONE,          PARAM_APPLY_CALIB },
     { PROTOCOL_PARAM_ID_CALIB_DIR,            PARAM_OFFSET(motor_calib.dir),                              PARAM_VALUE_INT16, -1.0f,     1.0f,     PARAM_RULE_CALIB_DIR,     PARAM_APPLY_CALIB },
@@ -320,6 +322,8 @@ void ParamRegistry_FillSnapshot(ParamSnapshotPayload *payload)
     payload->pll_zeta = params->speed_ctrl_params.pll_zeta;
     payload->speed_R = params->speed_ctrl_params.ff.R;
     payload->speed_Ke = params->speed_ctrl_params.ff.Ke;
+    payload->speed_residual_rho = params->speed_ctrl_params.residual_rho;
+    payload->speed_residual_deadband = params->speed_ctrl_params.residual_deadband;
 
     payload->velocity_limit = params->velocity_limit;
     payload->encoder_offset = params->encoder_offset;
