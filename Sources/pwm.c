@@ -312,58 +312,110 @@ void HSPWMB_WriteReg(uint8_t addr, uint8_t dat)
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>
 
 
-// 假设你的工程中已经有了相关的延时函数，如果没有请根据你的系统时钟补充
-extern void Delay_us(uint32_t us);
-extern void Delay_ms(uint32_t ms);
-// 假设你的系统时钟频率，请根据 config.h 中实际的系统时钟修改（如 24000000, 35000000 等）
-#define SYS_CLK_HZ  40000000  
+#define PWMA_NORMAL_RELOAD        399u
+#define PWMA_NORMAL_DUTY          199u
+#define MOTOR_PULSE_MIN_HZ        500u
+#define MOTOR_PULSE_MAX_HZ        3000u
+#define MOTOR_PULSE_MIN_WIDTH_PM  125u
+#define MOTOR_PULSE_MAX_WIDTH_PM  500u
+#define MOTOR_PULSE_MIN_AMPLITUDE 12u
+#define MOTOR_PULSE_ENVELOPE_MS   20u
 
-// 定义发声占空比比例（用于控制音量和保护硬件）
-// 10 表示 10% 占空比。请根据电机电感和电源电压微调，从小往大加！
-#define BEEP_DUTY_PERCENT  5
-
-////////////////////////////////////////
-// 硬件PWM直接发声函数 (修改版)
-// 入口参数: phase: 组合索引 (1:U-V, 2:V-W, 3:W-U)
-//           freq_hz: 声音频率 (Hz)
-//           duration_ms: 发声持续时间 (ms)
-// 函数返回: 无
-////////////////////////////////////////
-void Motor_PlayTone_HW(uint8_t phase, uint16_t freq_hz, uint16_t duration_ms)
+static void Motor_StopTone(void)
 {
-    // 1. 计算目标频率对应的重载值 ARR
-    // 因为你在 PWMA_Init() 中设置了中央对齐模式2 (CenterAlignMode2)，PWM周期为 2 * ARR 个时钟周期
-    // 频率 = SYS_CLK_HZ / (2 * ARR)  =>  ARR = SYS_CLK_HZ / (2 * freq_hz)
-    uint16_t arr_val = SYS_CLK_HZ / (2 * freq_hz);
-    uint16_t duty_val;
-    // 2. 动态修改定时器重载值，将PWM基础频率直接降到音频范围
-    PWMA_SetReload16(arr_val);
+    PWMA_Stop();
+    PWM_UpdateDutyABC(0u, 0u, 0u);
+    PWMA_GenerateUpdateEvent();
+}
 
-    // 3. 计算占空比对应的值
-    duty_val = (uint32_t)arr_val * BEEP_DUTY_PERCENT / 100;
+/* A-B 产生受控线电压，C 相保持中点；底层仍使用 120 kHz 功率载波。 */
+static void Motor_SetPulseLevel(int16_t level)
+{
+    uint16_t duty_a;
+    uint16_t duty_b;
 
-    // 4. 根据相位输出：选中相输出占空比方波，未选中相保持0电平(下桥导通或悬空)
-    if (phase == 1) {        // 驱动 U-V
-        PWM_UpdateDuty(PWMA_CH1, duty_val);
-        PWM_UpdateDuty(PWMA_CH2, 0);
-        PWM_UpdateDuty(PWMA_CH3, 0);
-    } else if (phase == 2) { // 驱动 V-W
-        PWM_UpdateDuty(PWMA_CH1, 0);
-        PWM_UpdateDuty(PWMA_CH2, duty_val);
-        PWM_UpdateDuty(PWMA_CH3, 0);
-    } else if (phase == 3) { // 驱动 W-U
-        PWM_UpdateDuty(PWMA_CH1, 0);
-        PWM_UpdateDuty(PWMA_CH2, 0);
-        PWM_UpdateDuty(PWMA_CH3, duty_val);
+    duty_a = (uint16_t)((int16_t)PWMA_NORMAL_DUTY + level);
+    duty_b = (uint16_t)((int16_t)PWMA_NORMAL_DUTY - level);
+    PWM_UpdateDutyABC(duty_a, duty_b, PWMA_NORMAL_DUTY);
+}
+
+/*
+ * 8-bit pulse wave。非 50% 脉宽时降低负半周幅度，使每周期平均线电压为零，
+ * 在保留 25%/37.5% pulse 音色的同时减少直流力矩和转子顶动。
+ */
+static void Motor_PlayPulseTone(uint16_t target_hz, uint16_t duration_ms,
+                                uint16_t pulse_width_pm, uint16_t max_amplitude)
+{
+    uint16_t period_us;
+    uint16_t positive_us;
+    uint16_t negative_us;
+    uint16_t cycle_count;
+    uint16_t attack_cycles;
+    uint16_t release_cycles;
+    uint16_t cycles_left;
+    uint16_t amplitude;
+    uint16_t negative_amplitude;
+    uint16_t cycle;
+
+    if ((target_hz < MOTOR_PULSE_MIN_HZ) || (target_hz > MOTOR_PULSE_MAX_HZ) ||
+        (pulse_width_pm < MOTOR_PULSE_MIN_WIDTH_PM) ||
+        (pulse_width_pm > MOTOR_PULSE_MAX_WIDTH_PM) ||
+        (max_amplitude > PWMA_NORMAL_DUTY) ||
+        (max_amplitude < MOTOR_PULSE_MIN_AMPLITUDE) || (duration_ms < 40u))
+    {
+        return;
     }
 
-    // 5. 延时维持发声
-    Delay_ms(duration_ms);
+    period_us = (uint16_t)(1000000UL / target_hz);
+    positive_us = (uint16_t)((uint32_t)period_us * pulse_width_pm / 1000u);
+    negative_us = period_us - positive_us;
+    cycle_count = (uint16_t)((uint32_t)target_hz * duration_ms / 1000UL);
+    attack_cycles = (uint16_t)((uint32_t)target_hz * MOTOR_PULSE_ENVELOPE_MS /
+                               1000UL);
+    release_cycles = attack_cycles;
+    if (attack_cycles == 0u)
+    {
+        attack_cycles = 1u;
+        release_cycles = 1u;
+    }
 
-    // 6. 单音结束，关闭本轮输出
-    PWM_UpdateDuty(PWMA_CH1, 0);
-    PWM_UpdateDuty(PWMA_CH2, 0);
-    PWM_UpdateDuty(PWMA_CH3, 0);
+    PWMA_Stop();
+    PWMA_SetReload16(PWMA_NORMAL_RELOAD);
+    PWMA_SetCounter(0u);
+    PWM_UpdateDutyABC(PWMA_NORMAL_DUTY, PWMA_NORMAL_DUTY, PWMA_NORMAL_DUTY);
+    PWMA_GenerateUpdateEvent();
+    PWMA_Run();
+
+    for (cycle = 0u; cycle < cycle_count; cycle++)
+    {
+        cycles_left = cycle_count - cycle;
+        if (cycle < attack_cycles)
+        {
+            amplitude = (uint16_t)(MOTOR_PULSE_MIN_AMPLITUDE +
+                        (uint32_t)(max_amplitude - MOTOR_PULSE_MIN_AMPLITUDE) *
+                        cycle / attack_cycles);
+        }
+        else if (cycles_left <= release_cycles)
+        {
+            amplitude = (uint16_t)(MOTOR_PULSE_MIN_AMPLITUDE +
+                        (uint32_t)(max_amplitude - MOTOR_PULSE_MIN_AMPLITUDE) *
+                        (cycles_left - 1u) / release_cycles);
+        }
+        else
+        {
+            amplitude = max_amplitude;
+        }
+
+        negative_amplitude = (uint16_t)((uint32_t)amplitude * pulse_width_pm /
+                             (1000u - pulse_width_pm));
+
+        Motor_SetPulseLevel((int16_t)amplitude);
+        delay_us(positive_us);
+        Motor_SetPulseLevel(-(int16_t)negative_amplitude);
+        delay_us(negative_us);
+    }
+
+    Motor_StopTone();
 }
 
 ////////////////////////////////////////
@@ -374,36 +426,20 @@ void Motor_PlayTone_HW(uint8_t phase, uint16_t freq_hz, uint16_t duration_ms)
 ////////////////////////////////////////
 void Motor_PowerOn_SelfTest(void)
 {
-    // 确保输出为0，停止电机
-    PWM_UpdateDuty(PWMA_CH1, 0); 
-    PWM_UpdateDuty(PWMA_CH2, 0); 
-    PWM_UpdateDuty(PWMA_CH3, 0);
-    Delay_ms(100);
+    Motor_StopTone();
+    delay_ms(50u);
 
-    // ==========================================
-    // 第一组自检：U-V相 (3 3)
-    // ==========================================
-    Motor_PlayTone_HW(1, 2500, 80);   // 3 (mi)
-    Delay_ms(40);
-    Motor_PlayTone_HW(1, 2500, 80);   // 3 (mi)
-    Delay_ms(150); // 组间间隔
+    /* Do-Mi-Sol：脉宽逐渐变宽，音色从明亮变为饱满的经典方波。 */
+    Motor_PlayPulseTone(1047u, 160u, 250u, 100u); /* C6, 25% pulse */
+    delay_ms(45u);
+    Motor_PlayPulseTone(1319u, 160u, 375u, 100u); /* E6, 37.5% pulse */
+    delay_ms(45u);
+    Motor_PlayPulseTone(1568u, 300u, 500u, 100u); /* G6, 50% square */
 
-    // ==========================================
-    // 第二组自检：V-W相 (3 1)
-    // ==========================================
-    Motor_PlayTone_HW(2, 2500, 80);   // 3 (mi)
-    Delay_ms(40);
-    Motor_PlayTone_HW(2, 2000, 80);   // 1 (do)
-    Delay_ms(150); // 组间间隔
-
-    // ==========================================
-    // 第三组自检：W-U相 (3 5 5)
-    // ==========================================
-    Motor_PlayTone_HW(3, 2500, 80);   // 3 (mi)
-    Delay_ms(40);
-    Motor_PlayTone_HW(3, 3000, 80);   // 5 (sol)
-    Delay_ms(40);
-
-    // 恢复正常电机控制模式
-    PWMA_Init(); 
+    /* 恢复 FOC 使用的 120 kHz PWM 中点，不重复初始化 GPIO/输出级。 */
+    PWMA_SetReload16(PWMA_NORMAL_RELOAD);
+    PWMA_SetCounter(0u);
+    PWM_UpdateDutyABC(PWMA_NORMAL_DUTY, PWMA_NORMAL_DUTY, PWMA_NORMAL_DUTY);
+    PWMA_GenerateUpdateEvent();
+    PWMA_Run();
 }
