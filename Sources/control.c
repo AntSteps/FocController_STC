@@ -183,7 +183,7 @@ void SpeedController_Init(SpeedController_Params_t *params)
 
     /* 初始化子模块 */
     PI_Init(&g_speed_ctrl.pi, params->kp, params->ki, params->beta, params->out_max, params->out_min);
-    LPF_Init(&g_speed_ctrl.speed_lpf, params->lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
+    LPF_Init(&g_speed_ctrl.speed_lpf, params->lpf_time_constant_ms, SPEED_OBSERVER_SAMPLE_FREQ_HZ);
     LPF_Init(&g_speed_ctrl.cmd_lpf, params->cmd_lpf_time_constant_ms, SPEED_CTRL_SAMPLE_FREQ_HZ);
 
     /* 初始化状态 */
@@ -194,6 +194,8 @@ void SpeedController_Init(SpeedController_Params_t *params)
     g_speed_ctrl.filtered_speed = 0.0f;
     g_speed_ctrl.last_angle = 0.0f;
     g_speed_ctrl.angle_initialized = 0;
+    g_speed_ctrl.observer_speed_sum = 0.0f;
+    g_speed_ctrl.observer_sample_count = 0u;
     g_speed_ctrl.pi_output = 0.0f;
     g_speed_ctrl.accel_ff = 0.0f;
     g_speed_ctrl.load_ff = 0.0f;
@@ -228,8 +230,10 @@ float SpeedController_GetOutput(void)
     return g_speed_ctrl.total_output;
 }
 
-float SpeedController_Update(float mechanical_angle)
+float SpeedController_UpdateObserver(float mechanical_angle)
 {
+    float speed;
+
     if (!g_speed_ctrl.angle_initialized) {
         /* 首次运行，记录角度，不计算速度 */
         g_speed_ctrl.last_angle = mechanical_angle;
@@ -237,14 +241,16 @@ float SpeedController_Update(float mechanical_angle)
 #if SPEED_OBSERVER_METHOD == 1
         PLL_Reset(&g_speed_ctrl.pll, mechanical_angle);
 #endif
-        return g_speed_ctrl.total_output;  /* 返回上次输出（初始为0） */
+        speed = 0.0f;
     }
-
+    else
     {
         #if SPEED_OBSERVER_METHOD == 1
         /* PLL速度观测器：直接传入角度，内部完成差分+滤波 */
-        g_speed_ctrl.filtered_speed = PLL_Update(&g_speed_ctrl.pll, mechanical_angle, SPEED_CTRL_SAMPLE_FREQ_HZ);
         g_speed_ctrl.last_angle = mechanical_angle;
+        speed = PLL_Update(&g_speed_ctrl.pll,
+                           mechanical_angle,
+                           SPEED_OBSERVER_SAMPLE_FREQ_HZ);
         #else
         {
             /* 差分测速：计算角度差分（处理跨圈情况） */
@@ -255,10 +261,35 @@ float SpeedController_Update(float mechanical_angle)
             } else if (delta_angle < -PI) {
                 delta_angle += TWO_PI;
             }
-            g_speed_ctrl.filtered_speed = LPF_Update(&g_speed_ctrl.speed_lpf, delta_angle * SPEED_CTRL_SAMPLE_FREQ_HZ);
+            speed = LPF_Update(&g_speed_ctrl.speed_lpf,
+                               delta_angle * SPEED_OBSERVER_SAMPLE_FREQ_HZ);
         }
         #endif
     }
+
+    g_speed_ctrl.observer_speed_sum += speed;
+    g_speed_ctrl.observer_sample_count++;
+    return speed;
+}
+
+BOOL SpeedController_TryGetAveragedSpeed(float *averaged_speed)
+{
+    if ((averaged_speed == NULL) ||
+        (g_speed_ctrl.observer_sample_count < SPEED_CTRL_DECIMATION))
+    {
+        return FALSE;
+    }
+
+    *averaged_speed = g_speed_ctrl.observer_speed_sum
+                    / (float)g_speed_ctrl.observer_sample_count;
+    g_speed_ctrl.observer_speed_sum = 0.0f;
+    g_speed_ctrl.observer_sample_count = 0u;
+    return TRUE;
+}
+
+float SpeedController_UpdateFromSpeed(float measured_speed)
+{
+    g_speed_ctrl.filtered_speed = measured_speed;
 
     /* 命令整形：每个速度环周期推进一次目标速度滤波 */
     g_speed_ctrl.target_speed = LPF_Update(&g_speed_ctrl.cmd_lpf, g_speed_ctrl.raw_target_speed);
@@ -299,6 +330,10 @@ void SpeedController_Reset(void)
     PI_Reset(&g_speed_ctrl.pi);
     LPF_Reset(&g_speed_ctrl.speed_lpf);
     g_speed_ctrl.angle_initialized = 0;
+    g_speed_ctrl.filtered_speed = 0.0f;
+    g_speed_ctrl.last_angle = 0.0f;
+    g_speed_ctrl.observer_speed_sum = 0.0f;
+    g_speed_ctrl.observer_sample_count = 0u;
     g_speed_ctrl.pi_output = 0.0f;
     g_speed_ctrl.accel_ff = 0.0f;
     g_speed_ctrl.friction_ff = 0.0f;

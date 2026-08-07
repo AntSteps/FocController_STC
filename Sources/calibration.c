@@ -5,18 +5,14 @@
 
 static Motor_Calibration g_motor_cal;
 static float data s_electrical_scale = 0.0f;
-static float data s_mechanical_scale = 1.0f;
 static float data s_electrical_offset_rad = 0.0f;
-static float data s_mechanical_offset_rad = 0.0f;
-static float s_harmonic_amp_1_mech = 0.0f;
-static float s_harmonic_amp_2_mech = 0.0f;
+static float data s_inv_pole_pairs = 0.0f;
 
 static void Calibration_UpdateRuntimeCache(void)
 {
     float inv_pole_pairs;
 
     s_electrical_scale = (float)g_motor_cal.dir * (float)g_motor_cal.pole_pairs;
-    s_mechanical_scale = (float)g_motor_cal.dir;
     s_electrical_offset_rad = g_motor_cal.electrical_offset_rad;
 
     if (g_motor_cal.pole_pairs > 0)
@@ -28,9 +24,7 @@ static void Calibration_UpdateRuntimeCache(void)
         inv_pole_pairs = 0.0f;
     }
 
-    s_mechanical_offset_rad = g_motor_cal.electrical_offset_rad * inv_pole_pairs;
-    s_harmonic_amp_1_mech = g_motor_cal.harmonic_amp_1 * inv_pole_pairs;
-    s_harmonic_amp_2_mech = g_motor_cal.harmonic_amp_2 * inv_pole_pairs;
+    s_inv_pole_pairs = inv_pole_pairs;
 }
 
 static float Calibration_Normalize_0_2pi_Fast(float angle)
@@ -101,24 +95,48 @@ void Motor_Calibration_Init(const Motor_Calibration *calib)
     Calibration_UpdateRuntimeCache();
 }
 
+void Motor_Calibration_GetAngles(float raw_mechanical_rad,
+                                 float *mechanical_rad,
+                                 float *electrical_rad)
+{
+    float electrical_unwrapped;
+    float harmonic_1;
+    float harmonic_2;
+
+    harmonic_1 = g_motor_cal.harmonic_amp_1
+               * (float)sin(raw_mechanical_rad + g_motor_cal.harmonic_phase_1);
+    harmonic_2 = g_motor_cal.harmonic_amp_2
+               * (float)sin(2.0f * raw_mechanical_rad + g_motor_cal.harmonic_phase_2);
+
+    electrical_unwrapped = raw_mechanical_rad * s_electrical_scale
+                         - s_electrical_offset_rad
+                         - harmonic_1
+                         - harmonic_2;
+
+    if (electrical_rad != NULL)
+    {
+        *electrical_rad = Calibration_Normalize_0_2pi_Fast(electrical_unwrapped);
+    }
+
+    if (mechanical_rad != NULL)
+    {
+        *mechanical_rad = Calibration_Normalize_MechanicalFast(
+            electrical_unwrapped * s_inv_pole_pairs);
+    }
+}
+
 float Motor_Calibration_GetElectricalAngle(float mechanical_rad)
 {
     float elec;
 
-    elec = mechanical_rad * s_electrical_scale - s_electrical_offset_rad;
-    elec -= g_motor_cal.harmonic_amp_1 * (float)sin(mechanical_rad + g_motor_cal.harmonic_phase_1);
-    elec -= g_motor_cal.harmonic_amp_2 * (float)sin(2.0f * mechanical_rad + g_motor_cal.harmonic_phase_2);
-
-    return Calibration_Normalize_0_2pi_Fast(elec);
+    Motor_Calibration_GetAngles(mechanical_rad, NULL, &elec);
+    return elec;
 }
 
 float Motor_Calibration_GetMechanicalAngle(float mechanical_rad)
 {
     float mech;
 
-    mech = mechanical_rad * s_mechanical_scale - s_mechanical_offset_rad;
-    mech -= s_harmonic_amp_1_mech * (float)sin(mechanical_rad + g_motor_cal.harmonic_phase_1);
-    mech -= s_harmonic_amp_2_mech * (float)sin(2.0f * mechanical_rad + g_motor_cal.harmonic_phase_2);
-
-    return Calibration_Normalize_MechanicalFast(mech);
+    Motor_Calibration_GetAngles(mechanical_rad, &mech, NULL);
+    return mech;
 }

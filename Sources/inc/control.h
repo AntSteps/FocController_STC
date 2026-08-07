@@ -10,8 +10,10 @@
 /* 速度观测器选择：0=角度差分+LPF，1=PLL */
 #define SPEED_OBSERVER_METHOD   1
 
-/* 速度环采样频率 (Hz) */
-#define SPEED_CTRL_SAMPLE_FREQ_HZ   300.0f
+/* 高频观测器与低频速度环的更新频率。 */
+#define SPEED_OBSERVER_SAMPLE_FREQ_HZ  5000.0f
+#define SPEED_CTRL_DECIMATION          17u
+#define SPEED_CTRL_SAMPLE_FREQ_HZ      (SPEED_OBSERVER_SAMPLE_FREQ_HZ / (float)SPEED_CTRL_DECIMATION)
 
 /*------------------------------------------
  * 一阶低通滤波器
@@ -140,6 +142,8 @@ typedef struct {
     float filtered_speed;       /* 滤波后速度 */
     float last_angle;           /* 上次角度（用于差分） */
     uint8 angle_initialized;    /* 角度初始化标志 */
+    float observer_speed_sum;   /* 高频观测速度的降采样前累加值 */
+    uint8 observer_sample_count;
 
     /* 电流环各项输出 */
     float pi_output;            /* PI输出 */
@@ -170,8 +174,12 @@ float SpeedController_GetTarget(void);
 float SpeedController_GetFilteredSpeed(void);
 // 获取控制器总输出
 float SpeedController_GetOutput(void);
-// 更新速度环（传入当前机械角度，单位rad），返回输出（q轴电压/电流参考）
-float SpeedController_Update(float mechanical_angle);
+// 高频更新速度观测器（传入校正机械角，单位rad），返回瞬时估计速度
+float SpeedController_UpdateObserver(float mechanical_angle);
+// 累计满一个速度环周期时返回平均速度
+BOOL SpeedController_TryGetAveragedSpeed(float *averaged_speed);
+// 低频更新速度PI（传入降采样前平均后的速度），返回q轴电压
+float SpeedController_UpdateFromSpeed(float measured_speed);
 // 重置速度环
 void SpeedController_Reset(void);
 // 运行时刷新参数，保留目标速度

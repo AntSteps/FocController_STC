@@ -83,7 +83,7 @@ void TIMER0_ISR(void) interrupt TMR0_VECTOR
     //<<AICUBE_USER_TIMER0_ISR_CODE1_BEGIN>>
     // 在此添加中断函数用户代码
     P36=1;
-    Motor_Update();    // 5kHz换相，内部处理300Hz速度环
+    Motor_Update();    // 5kHz换相/速度观测，内部每17次更新一次速度PI
     P36=0;
 
     s_tick_divider++;

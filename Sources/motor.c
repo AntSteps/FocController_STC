@@ -5,9 +5,6 @@
 #include "control.h"
 #include "adc.h"
 
-// PID执行周期计数（5kHz / 300Hz ≈ 16.67，取17）
-#define PID_PERIOD_COUNT    17
-
 // 开环测试开关：置1后忽略编码器电角度与速度环，直接自增电角度驱动电机旋转
 #define MOTOR_OPEN_LOOP_TEST_ENABLE        0
 // 开环测试时每个5kHz周期增加的电角度(rad)，可改符号切换转向
@@ -17,7 +14,6 @@
 #define MOTOR_OPEN_LOOP_TEST_TWO_PI        6.28318530718f
 
 // 控制相关
-static uint8_t s_pid_counter = 0;     // PID计数器，用于分频
 static float s_cached_angle = 0.0f;   // 缓存的角度（用于速度计算）
 static float s_q_axis_voltage = 0.0f; // Q轴电压占空比（由速度环计算）
 static uint8_t s_control_mode = MOTOR_CONTROL_MODE_STOP;
@@ -51,8 +47,6 @@ void Motor_SetControlMode(uint8_t control_mode)
     }
 
     s_control_mode = control_mode;
-    s_pid_counter = 0u;
-
     if (s_control_mode == MOTOR_CONTROL_MODE_STOP)
     {
         s_q_axis_voltage = 0.0f;
@@ -101,20 +95,20 @@ void Motor_Update(void)
     }
     {
         float elec_angle;
+        float mech_angle;
+        float speed_feedback;
         s_cached_angle = Encoder_UpdateAndGetAngle();
 
-
-        elec_angle = Motor_Calibration_GetElectricalAngle(s_cached_angle);
+        Motor_Calibration_GetAngles(s_cached_angle, &mech_angle, &elec_angle);
 
         if (s_control_mode == MOTOR_CONTROL_MODE_SPEED)
         {
-            if (++s_pid_counter >= PID_PERIOD_COUNT)
+            (void)SpeedController_UpdateObserver(mech_angle);
+            if (SpeedController_TryGetAveragedSpeed(&speed_feedback))
             {
-                s_pid_counter = 0u;
                 /* 电压→占空比：Vout / Vbus */
-                s_q_axis_voltage = SpeedController_Update(
-                    Motor_Calibration_GetMechanicalAngle(s_cached_angle)) / ADC_GetBusVoltage();
-                    //   s_q_axis_voltage = SpeedController_Update(s_cached_angle) / ADC_GetBusVoltage();
+                s_q_axis_voltage = SpeedController_UpdateFromSpeed(speed_feedback)
+                                 / ADC_GetBusVoltage();
             }
         }
         else

@@ -21,6 +21,11 @@ typedef struct
 /* 初始化并应用校准参数，传入NULL则使用默认参数 */
 void Motor_Calibration_Init(const Motor_Calibration *calib);
 
+/* 一次计算同时获得校正后的机械角和电角度，供高频控制路径使用。 */
+void Motor_Calibration_GetAngles(float raw_mechanical_rad,
+                                 float *mechanical_rad,
+                                 float *electrical_rad);
+
 /* 计算电角度（应用当前校准参数） */
 float Motor_Calibration_GetElectricalAngle(float mechanical_rad);
 
