@@ -17,7 +17,7 @@ static const ProtocolRequestDescriptor s_request_descriptors[] =
     { PROTOCOL_HEAD_CALIB_CMD, sizeof(CalibCmdFrame), PROTOCOL_REQUEST_CALIB }
 };
 
-static void ProtocolFrame_WriteU16BE(uint8_t *buf, uint16_t value)
+static void ProtocolFrame_WriteU16BE(uint8_t xdata *buf, uint16_t value)
 {
     buf[0] = (uint8_t)(value >> 8);
     buf[1] = (uint8_t)value;
@@ -28,7 +28,7 @@ static uint16_t ProtocolFrame_ReadU16BE(const uint8_t *buf)
     return (uint16_t)(((uint16_t)buf[0] << 8) | (uint16_t)buf[1]);
 }
 
-static void ProtocolFrame_WriteFloatRaw(uint8_t *buf, float value)
+static void ProtocolFrame_WriteFloatRaw(uint8_t xdata *buf, float value)
 {
     memcpy(buf, &value, sizeof(float));
 }
@@ -87,6 +87,17 @@ BOOL ProtocolFrame_CheckCrc(const uint8_t *frame, uint8_t frame_len)
     return (BOOL)(Mem_CRC8_Check((uint8_t *)frame, frame_len, 1) == 0);
 }
 
+BOOL ProtocolFrame_CheckCrcXData(const uint8_t xdata *frame, uint8_t frame_len)
+{
+    return (BOOL)(Mem_CRC8_CheckXData(frame, frame_len, 1u) == 0u);
+}
+
+static uint8_t ProtocolFrame_CalcCrcXData(const uint8_t xdata *frame,
+                                          uint8_t frame_len_without_crc)
+{
+    return Mem_CRC8_CheckXData(frame, frame_len_without_crc, 0u);
+}
+
 BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, ProtocolRequest *request)
 {
     const ProtocolRequestDescriptor *descriptor;
@@ -143,11 +154,13 @@ BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, Protoc
     return TRUE;
 }
 // 对于协议请求构造响应
-BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8_t *frame_len)
+BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t xdata *frame, uint8_t *frame_len)
 {
     uint8_t len;
 
-    if ((reply == (const ProtocolReply *)0) || (frame == (uint8_t *)0) || (frame_len == (uint8_t *)0))
+    if ((reply == (const ProtocolReply *)0) ||
+        (frame == (uint8_t xdata *)0) ||
+        (frame_len == (uint8_t *)0))
     {
         return FALSE;
     }
@@ -162,7 +175,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         frame[3] = reply->cmd_type;
         frame[4] = reply->result_code;
         frame[5] = reply->seq;
-        frame[6] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[6] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     case PROTOCOL_REPLY_STATE:
@@ -177,7 +190,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         ProtocolFrame_WriteFloatRaw(&frame[20], reply->voltage);
         frame[24] = reply->health_status;
         frame[25] = reply->seq;
-        frame[26] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[26] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     case PROTOCOL_REPLY_PARAM_VALUE:
@@ -187,7 +200,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         frame[3] = reply->param_id;
         ProtocolFrame_WriteFloatRaw(&frame[4], reply->value);
         frame[8] = reply->seq;
-        frame[9] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[9] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     case PROTOCOL_REPLY_PARAM_SNAPSHOT:
@@ -197,7 +210,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         frame[3] = reply->snapshot_version;
         memcpy(&frame[4], &reply->payload, sizeof(ParamSnapshotPayload));
         frame[4 + sizeof(ParamSnapshotPayload)] = reply->seq;
-        frame[5 + sizeof(ParamSnapshotPayload)] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[5 + sizeof(ParamSnapshotPayload)] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     case PROTOCOL_REPLY_CALIB_STATUS:
@@ -207,7 +220,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         frame[3] = reply->calib_state;
         frame[4] = reply->progress;
         frame[5] = reply->seq;
-        frame[6] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[6] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     case PROTOCOL_REPLY_CALIB_SAMPLE:
@@ -220,7 +233,7 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8
         ProtocolFrame_WriteFloatRaw(&frame[10], reply->calib_sample_mechanical_angle);
         ProtocolFrame_WriteFloatRaw(&frame[14], reply->calib_sample_error);
         frame[18] = 0u;
-        frame[19] = ProtocolFrame_CalcCrc(frame, (uint8_t)(len - 1));
+        frame[19] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     default:

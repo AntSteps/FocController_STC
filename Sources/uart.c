@@ -15,17 +15,6 @@ static volatile BOOL s_rx_locked = 0;
 static volatile uint8_t s_uart3_rx_activity = 0u;
 static volatile uint8_t s_uart3_timeout_retry = 0u;
 static volatile uint8_t s_uart3_tx_ready = 1; // 串口3发送DMA是否准备好
-static void UART_DebugPulse(uint8_t count)
-{
-    while (count--)
-    {
-        P36 = 1;
-        delay_us(20);
-        P36 = 0;
-        delay_us(20);
-    }
-}
-
 uint8_t xdata pu8UR3DMATxBuffer[UART3_TX_DMA_BUFFER_SIZE]; // 串口3DMA发送缓冲区数组
 
 #ifndef UART3_VECTOR
@@ -64,6 +53,41 @@ uint8_t UART3_WaitLockTx(void)
     }
 
     return 0;
+}
+
+uint8_t xdata *UART3_WaitLockTxBuffer(void)
+{
+    if (!UART3_WaitLockTx())
+    {
+        return (uint8_t xdata *)0;
+    }
+
+    return pu8UR3DMATxBuffer;
+}
+
+void UART3_UnlockTx(void)
+{
+    uint8_t ea_state;
+
+    ea_state = EA;
+    DisableGlobalInt();
+    s_uart3_tx_ready = 1;
+    EA = ea_state;
+}
+
+uint8_t UART3_StartLockedTx(uint8_t len)
+{
+    if ((len == 0u) || (len > UART3_TX_DMA_BUFFER_SIZE))
+    {
+        UART3_UnlockTx();
+        return 0u;
+    }
+
+    DMA_UART3_SetTxAmount((uint16_t)(len - 1u));
+    DMA_UART3_ClearTxFlag();
+    RS485_DIR = 1;
+    DMA_UART3_TriggerTx();
+    return 1u;
 }
 
 static uint8_t UART3_FindFreeRxSlot(uint8_t start_index)
@@ -158,6 +182,7 @@ static void UART3_RestartRx(void)
     DMA_UART3_DisableRx(); 
 
     // 清除中断标志和底层 FIFO 里的残余字节
+    UART3_ClearTimeoutFlag();
     DMA_UART3_ClearRxFlag();
     DMA_UART3_ClearFIFO();
     
@@ -396,6 +421,58 @@ uint8_t xdata *UART_GetRxBuffer(uint8_t *len)
     return (uint8_t xdata *)s_uart3_rx_dma_buffer[read_index];
 }
 
+uint8_t xdata *UART_PeekActiveRxBuffer(uint8_t *slot_index, uint8_t *len)
+{
+    uint8_t active_index;
+    uint8_t rx_len;
+
+    if ((slot_index == (uint8_t *)0) || (len == (uint8_t *)0))
+    {
+        return (uint8_t xdata *)0;
+    }
+
+    active_index = s_rx_active_index;
+    rx_len = UART3_GetRxCount();
+    if (active_index != s_rx_active_index)
+    {
+        *slot_index = UART3_INVALID_SLOT;
+        *len = 0u;
+        return (uint8_t xdata *)0;
+    }
+    *slot_index = active_index;
+    *len = rx_len;
+
+    if (rx_len == 0u)
+    {
+        return (uint8_t xdata *)0;
+    }
+    return (uint8_t xdata *)s_uart3_rx_dma_buffer[active_index];
+}
+
+BOOL UART_PublishActiveRxBuffer(uint8_t slot_index, uint8_t min_len)
+{
+    uint8_t ea_state;
+    uint8_t rx_len;
+    BOOL published;
+
+    published = FALSE;
+    ea_state = EA;
+    DisableGlobalInt();
+
+    if (slot_index == s_rx_active_index)
+    {
+        rx_len = UART3_GetRxCount();
+        if (rx_len >= min_len)
+        {
+            UART3_PublishRx(rx_len);
+            published = TRUE;
+        }
+    }
+
+    EA = ea_state;
+    return published;
+}
+
 void UART_ReleaseRxBuffer(void)
 {
     uint8_t ea_state;
@@ -415,31 +492,4 @@ void UART_ReleaseRxBuffer(void)
     EA = ea_state;
 }
 
-//! 在改变dma数组的时候注意修改len的值
-uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len)
-{
-    if ((pData == (const uint8_t *)0) || (len == 0))
-    {
-        return 0;
-    }
-
-    if (len > UART3_TX_DMA_BUFFER_SIZE)
-    {
-        len = UART3_TX_DMA_BUFFER_SIZE;
-    }
-
-    if (!UART3_WaitLockTx())
-    {
-        return 0;
-    }
-
-    /* DMA 发送长度已单独配置，无需每次清空整块缓冲。 */
-    memcpy(pu8UR3DMATxBuffer, pData, len);
-    DMA_UART3_SetTxAmount((uint16_t)(len - 1u));
-    DMA_UART3_ClearTxFlag();
-    RS485_DIR = 1; // P25高电平，使能RS485发送
-    DMA_UART3_TriggerTx();
-
-    return 1;
-}
 //<<AICUBE_USER_FUNCTION_IMPLEMENT_END>>

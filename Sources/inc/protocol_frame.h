@@ -305,8 +305,9 @@ typedef struct
 
 BOOL ProtocolFrame_FindRequestLength(uint8_t head_byte0, uint8_t head_byte1, uint8_t *frame_len);
 BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, ProtocolRequest *request);
-BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t *frame, uint8_t *frame_len);
+BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t xdata *frame, uint8_t *frame_len);
 uint8_t ProtocolFrame_CalcCrc(const uint8_t *frame, uint8_t frame_len_without_crc);
 BOOL ProtocolFrame_CheckCrc(const uint8_t *frame, uint8_t frame_len);
+BOOL ProtocolFrame_CheckCrcXData(const uint8_t xdata *frame, uint8_t frame_len);
 
 #endif

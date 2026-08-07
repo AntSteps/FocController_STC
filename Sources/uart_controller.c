@@ -4,7 +4,72 @@
 
 static uint8_t s_protocol_rx_stream[PROTOCOL_MAX_FRAME_SIZE];
 static uint8_t s_protocol_rx_stream_len = 0u;
-static uint8_t s_protocol_tx_frame[PROTOCOL_MAX_FRAME_SIZE];
+
+static BOOL ProtocolController_TryPublishCompleteRx(void)
+{
+    uint8_t xdata *active_buffer;
+    uint8_t active_slot;
+    uint8_t active_len;
+    uint8_t frame_len;
+    uint8_t required_len;
+    uint8_t head0;
+    uint8_t head1;
+
+    active_buffer = UART_PeekActiveRxBuffer(&active_slot, &active_len);
+    if (active_buffer == (uint8_t xdata *)0)
+    {
+        return FALSE;
+    }
+
+    if (s_protocol_rx_stream_len >= 2u)
+    {
+        head0 = s_protocol_rx_stream[0];
+        head1 = s_protocol_rx_stream[1];
+    }
+    else if (s_protocol_rx_stream_len == 1u)
+    {
+        head0 = s_protocol_rx_stream[0];
+        head1 = active_buffer[0];
+    }
+    else
+    {
+        if (active_len < 2u)
+        {
+            return FALSE;
+        }
+        head0 = active_buffer[0];
+        head1 = active_buffer[1];
+    }
+
+    if (!ProtocolFrame_FindRequestLength(head0, head1, &frame_len) ||
+        (s_protocol_rx_stream_len >= frame_len))
+    {
+        return FALSE;
+    }
+
+    required_len = (uint8_t)(frame_len - s_protocol_rx_stream_len);
+    if (active_len < required_len)
+    {
+        return FALSE;
+    }
+
+    return UART_PublishActiveRxBuffer(active_slot, required_len);
+}
+
+static BOOL ProtocolController_DecodeExactFrame(const uint8_t xdata *frame,
+                                                uint8_t frame_len,
+                                                ProtocolRequest *request)
+{
+    if ((frame == (const uint8_t xdata *)0) ||
+        (request == (ProtocolRequest *)0) ||
+        (frame_len < 2u) ||
+        !ProtocolFrame_CheckCrcXData(frame, frame_len))
+    {
+        return FALSE;
+    }
+
+    return ProtocolFrame_DecodeRequest(frame, frame_len, request);
+}
 
 static void ProtocolController_AppendChunk(const uint8_t *chunk, uint8_t chunk_len)
 {
@@ -122,23 +187,38 @@ BOOL ProtocolController_PumpRx(ProtocolRequest *request)
         return FALSE;
     }
 
+    found_request = FALSE;
     while (1)
     {
         rx_buffer = UART_GetRxBuffer(&rx_len);
         if ((rx_buffer == (uint8_t xdata *)0) || (rx_len == 0u))
         {
+            if (ProtocolController_TryPublishCompleteRx())
+            {
+                continue;
+            }
             break;
         }
 
         if (rx_len <= UART3_RX_DMA_BUFFER_SIZE)
         {
-            ProtocolController_AppendChunk(rx_buffer, rx_len);
+            if ((s_protocol_rx_stream_len == 0u) &&
+                ProtocolController_DecodeExactFrame(rx_buffer, rx_len, request))
+            {
+                if (request->motor_id == DEVICE_ID)
+                {
+                    found_request = TRUE;
+                }
+            }
+            else
+            {
+                ProtocolController_AppendChunk(rx_buffer, rx_len);
+            }
         }
 
         UART_ReleaseRxBuffer();
     }
 
-    found_request = FALSE;
     while (ProtocolController_ExtractRequest(&latest_request))
     {
         /* 主循环本轮仅消费一条请求，这里保留最新一条。 */
@@ -152,11 +232,19 @@ BOOL ProtocolController_PumpRx(ProtocolRequest *request)
 BOOL ProtocolController_SendReply(const ProtocolReply *reply)
 {
     uint8_t frame_len;
+    uint8_t xdata *tx_buffer;
 
-    if (!ProtocolFrame_EncodeReply(reply, s_protocol_tx_frame, &frame_len))
+    tx_buffer = UART3_WaitLockTxBuffer();
+    if (tx_buffer == (uint8_t xdata *)0)
     {
         return FALSE;
     }
 
-    return (BOOL)UART_DMA_Send(s_protocol_tx_frame, frame_len);
+    if (!ProtocolFrame_EncodeReply(reply, tx_buffer, &frame_len))
+    {
+        UART3_UnlockTx();
+        return FALSE;
+    }
+
+    return (BOOL)UART3_StartLockedTx(frame_len);
 }

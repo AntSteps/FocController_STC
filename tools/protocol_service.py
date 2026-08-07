@@ -53,7 +53,9 @@ from protocol_codec import (
 DEFAULT_POLL_HZ = 10.0
 DEFAULT_CALIB_POLL_HZ = 2.0
 REQUEST_TIMEOUT_SECONDS = 1.5
-MIN_HALF_DUPLEX_GAP_SECONDS = 0.003
+MIN_HALF_DUPLEX_GAP_SECONDS = 0.0002
+SERIAL_IDLE_WAIT_SECONDS = 0.0005
+SCHEDULER_IDLE_WAIT_SECONDS = 0.005
 
 
 @dataclass
@@ -377,6 +379,24 @@ class PendingRequest:
     seq: int
     summary: str
     timestamp: float
+    log_traffic: bool = True
+
+
+@dataclass(frozen=True)
+class OutgoingFrame:
+    payload: bytes
+    summary: str
+    expected_seq: int
+    log_traffic: bool = True
+
+
+@dataclass(frozen=True)
+class PollingConfig:
+    motor_id: int = 0
+    state_enabled: bool = False
+    state_hz: float = DEFAULT_POLL_HZ
+    calib_enabled: bool = False
+    calib_hz: float = DEFAULT_CALIB_POLL_HZ
 
 
 class SerialWorker:
@@ -391,8 +411,9 @@ class SerialWorker:
         self.on_event = on_event
         self._serial: Optional[serial.Serial] = None
         self._thread: Optional[threading.Thread] = None
-        self._tx_queue: "Queue[Tuple[bytes, str, Optional[int]]]" = Queue()
+        self._tx_queue: "Queue[Tuple[bytes, str, Optional[int], bool]]" = Queue()
         self._stop_event = threading.Event()
+        self._wake_event = threading.Event()
         self._buffer = bytearray()
 
     def start(self) -> None:
@@ -404,12 +425,20 @@ class SerialWorker:
 
     def stop(self) -> None:
         self._stop_event.set()
+        self._wake_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.5)
         self._thread = None
 
-    def send(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
-        self._tx_queue.put((payload, summary, expected_seq))
+    def send(
+        self,
+        payload: bytes,
+        summary: str,
+        expected_seq: Optional[int],
+        log_traffic: bool = True,
+    ) -> None:
+        self._tx_queue.put((payload, summary, expected_seq, log_traffic))
+        self._wake_event.set()
 
     def _run(self) -> None:
         try:
@@ -419,7 +448,7 @@ class SerialWorker:
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.005,
+                timeout=0,
                 write_timeout=0.2,
             )
             self._serial.reset_input_buffer()
@@ -436,10 +465,15 @@ class SerialWorker:
         try:
             while not self._stop_event.is_set():
                 self._drain_tx_queue()
-                incoming = self._serial.read(max(1, int(self._serial.in_waiting or 0)))
+                waiting = int(self._serial.in_waiting or 0)
+                incoming = self._serial.read(waiting) if waiting > 0 else b""
                 if incoming:
                     self._buffer.extend(incoming)
                     self._process_rx_buffer()
+                    continue
+
+                self._wake_event.wait(SERIAL_IDLE_WAIT_SECONDS)
+                self._wake_event.clear()
         except serial.SerialException as exc:
             self.on_event("error", f"串口通信异常: {exc}")
         finally:
@@ -454,7 +488,7 @@ class SerialWorker:
     def _drain_tx_queue(self) -> None:
         while True:
             try:
-                payload, summary, expected_seq = self._tx_queue.get_nowait()
+                payload, summary, expected_seq, log_traffic = self._tx_queue.get_nowait()
             except Empty:
                 break
 
@@ -481,14 +515,15 @@ class SerialWorker:
                 )
                 continue
 
-            self.on_event(
-                "tx",
-                {
-                    "summary": summary,
-                    "payload": payload,
-                    "expected_seq": expected_seq,
-                },
-            )
+            if log_traffic:
+                self.on_event(
+                    "tx",
+                    {
+                        "summary": summary,
+                        "payload": payload,
+                        "expected_seq": expected_seq,
+                    },
+                )
 
     def _find_reply_header(self) -> int:
         for index in range(len(self._buffer) - 1):
@@ -576,43 +611,112 @@ class ProtocolService:
         self.sequence_counter = 0
         self.pending_request: Optional[PendingRequest] = None
         self.ready_after = 0.0
+        self._command_queue: "Queue[OutgoingFrame]" = Queue()
         self._worker_events: "Queue[Tuple[str, object]]" = Queue()
         self._events: "Queue[Tuple[str, object]]" = Queue()
+        self._state_lock = threading.Lock()
+        self._scheduler_stop = threading.Event()
+        self._scheduler_wake = threading.Event()
+        self._scheduler_thread: Optional[threading.Thread] = None
+        self._polling = PollingConfig()
+        self._next_state_poll_at = 0.0
+        self._next_calib_poll_at = 0.0
 
     @property
     def is_connected(self) -> bool:
-        return self.connected
+        with self._state_lock:
+            return self.connected
 
     @property
     def is_waiting_reply(self) -> bool:
-        return (self.pending_request is not None) or (time.monotonic() < self.ready_after)
+        with self._state_lock:
+            waiting = self.pending_request is not None or time.monotonic() < self.ready_after
+        return waiting or (not self._command_queue.empty())
 
     def connect(self, port: str, baudrate: int) -> None:
-        if self.worker is not None:
-            self._emit("error", "已有连接实例在运行")
-            return
+        with self._state_lock:
+            if self.worker is not None:
+                self._emit("error", "已有连接实例在运行")
+                return
 
-        self.connected = False
-        self.pending_request = None
-        self.ready_after = 0.0
-        self.worker = SerialWorker(port=port, baudrate=baudrate, on_event=self._post_worker_event)
-        self.worker.start()
+            self.connected = False
+            self.pending_request = None
+            self.ready_after = 0.0
+            self.worker = SerialWorker(port=port, baudrate=baudrate, on_event=self._post_worker_event)
+            worker = self.worker
+
+        self._clear_queue(self._command_queue)
+        self._clear_queue(self._worker_events)
+        self._scheduler_stop.clear()
+        self._scheduler_wake.clear()
+        self._scheduler_thread = threading.Thread(
+            target=self._run_scheduler,
+            name="protocol-scheduler",
+            daemon=True,
+        )
+        self._scheduler_thread.start()
+        worker.start()
 
     def disconnect(self) -> None:
-        worker = self.worker
-        self.worker = None
-        self.connected = False
-        self.pending_request = None
-        self.ready_after = 0.0
+        with self._state_lock:
+            worker = self.worker
+            self.connected = False
         if worker is not None:
             worker.stop()
 
+        self._scheduler_stop.set()
+        self._scheduler_wake.set()
+        scheduler = self._scheduler_thread
+        if scheduler is not None and scheduler.is_alive():
+            scheduler.join(timeout=1.5)
+        self._scheduler_thread = None
+
+        with self._state_lock:
+            self.worker = None
+            self.pending_request = None
+            self.ready_after = 0.0
+        self._clear_queue(self._command_queue)
+
     def allocate_seq(self, auto_enabled: bool, manual_seq: int) -> int:
         if auto_enabled:
-            seq = self.sequence_counter & 0xFF
-            self.sequence_counter = (self.sequence_counter + 1) & 0xFF
+            with self._state_lock:
+                seq = self.sequence_counter & 0xFF
+                self.sequence_counter = (self.sequence_counter + 1) & 0xFF
             return seq
         return manual_seq & 0xFF
+
+    def configure_polling(
+        self,
+        motor_id: int,
+        state_enabled: bool,
+        state_hz: float,
+        calib_enabled: bool,
+        calib_hz: float,
+    ) -> None:
+        config = PollingConfig(
+            motor_id=motor_id & 0xFF,
+            state_enabled=bool(state_enabled),
+            state_hz=max(0.2, float(state_hz)),
+            calib_enabled=bool(calib_enabled),
+            calib_hz=max(0.2, float(calib_hz)),
+        )
+        now = time.monotonic()
+        with self._state_lock:
+            previous = self._polling
+            self._polling = config
+            if (
+                config.state_enabled != previous.state_enabled
+                or config.state_hz != previous.state_hz
+                or config.motor_id != previous.motor_id
+            ):
+                self._next_state_poll_at = now
+            if (
+                config.calib_enabled != previous.calib_enabled
+                or config.calib_hz != previous.calib_hz
+                or config.motor_id != previous.motor_id
+            ):
+                self._next_calib_poll_at = now
+        self._scheduler_wake.set()
 
     def send_control(
         self,
@@ -700,9 +804,6 @@ class ProtocolService:
 
     def poll_events(self) -> List[Tuple[str, object]]:
         events: List[Tuple[str, object]] = []
-        self._process_worker_events()
-        self._release_timeouts()
-
         while True:
             try:
                 events.append(self._events.get_nowait())
@@ -727,23 +828,10 @@ class ProtocolService:
         self._queue_frame(frame.to_bytes(), frame.to_summary(QUERY_SUMMARY_LABELS, detail), seq)
 
     def _queue_frame(self, payload: bytes, summary: str, expected_seq: Optional[int]) -> None:
-        if self.worker is None:
+        with self._state_lock:
+            worker_exists = self.worker is not None
+        if not worker_exists:
             self._emit("error", "串口未连接，无法发送")
-            return
-
-        if time.monotonic() < self.ready_after:
-            self._emit("error", "半双工切换等待中，请稍后再发送")
-            return
-
-        if self.pending_request is not None:
-            age_ms = (time.monotonic() - self.pending_request.timestamp) * 1000.0
-            self._emit(
-                "error",
-                (
-                    "半双工等待响应中，暂不发送新请求: "
-                    f"seq={self.pending_request.seq} {self.pending_request.summary} ({age_ms:.1f} ms)"
-                ),
-            )
             return
 
         if expected_seq is None:
@@ -752,12 +840,14 @@ class ProtocolService:
                 self._emit("error", "原始帧无法识别 seq，半双工模式下拒绝发送")
                 return
 
-        self.pending_request = PendingRequest(
-            seq=expected_seq,
-            summary=summary,
-            timestamp=time.monotonic(),
+        self._command_queue.put(
+            OutgoingFrame(
+                payload=payload,
+                summary=summary,
+                expected_seq=expected_seq,
+            )
         )
-        self.worker.send(payload, summary, expected_seq)
+        self._scheduler_wake.set()
 
     def _infer_expected_seq(self, payload: bytes) -> Optional[int]:
         if len(payload) < 2:
@@ -776,16 +866,18 @@ class ProtocolService:
         return int(payload[-2])
 
     def _release_timeouts(self) -> None:
-        if self.pending_request is None:
-            return
+        now = time.monotonic()
+        with self._state_lock:
+            if self.pending_request is None:
+                return
 
-        elapsed = time.monotonic() - self.pending_request.timestamp
-        if elapsed < self.request_timeout:
-            return
+            elapsed = now - self.pending_request.timestamp
+            if elapsed < self.request_timeout:
+                return
 
-        timed_out = self.pending_request
-        self.pending_request = None
-        self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
+            timed_out = self.pending_request
+            self.pending_request = None
+            self.ready_after = now + MIN_HALF_DUPLEX_GAP_SECONDS
         self._emit(
             "timeout",
             {
@@ -811,25 +903,137 @@ class ProtocolService:
             else:
                 self._emit(event_type, payload)
 
+    def _run_scheduler(self) -> None:
+        while not self._scheduler_stop.is_set():
+            self._process_worker_events()
+            self._release_timeouts()
+            self._dispatch_next_request()
+            self._scheduler_wake.wait(self._scheduler_wait_timeout())
+            self._scheduler_wake.clear()
+
+        self._process_worker_events()
+
+    def _dispatch_next_request(self) -> None:
+        now = time.monotonic()
+        with self._state_lock:
+            if (
+                not self.connected
+                or self.worker is None
+                or self.pending_request is not None
+                or now < self.ready_after
+            ):
+                return
+            worker = self.worker
+
+        try:
+            outgoing = self._command_queue.get_nowait()
+        except Empty:
+            outgoing = self._build_due_poll(now)
+            if outgoing is None:
+                return
+
+        with self._state_lock:
+            if not self.connected or self.worker is not worker or self.pending_request is not None:
+                self._command_queue.put(outgoing)
+                return
+            self.pending_request = PendingRequest(
+                seq=outgoing.expected_seq,
+                summary=outgoing.summary,
+                timestamp=time.monotonic(),
+                log_traffic=outgoing.log_traffic,
+            )
+
+        worker.send(
+            outgoing.payload,
+            outgoing.summary,
+            outgoing.expected_seq,
+            log_traffic=outgoing.log_traffic,
+        )
+
+    def _build_due_poll(self, now: float) -> Optional[OutgoingFrame]:
+        with self._state_lock:
+            config = self._polling
+            state_due = config.state_enabled and now >= self._next_state_poll_at
+            calib_due = config.calib_enabled and now >= self._next_calib_poll_at
+            if not state_due and not calib_due:
+                return None
+
+            use_calib = calib_due and (
+                not state_due or self._next_calib_poll_at <= self._next_state_poll_at
+            )
+            if use_calib:
+                query_type = QUERY_GET_CALIB_STATUS
+                period = 1.0 / config.calib_hz
+                self._next_calib_poll_at = max(self._next_calib_poll_at + period, now + period)
+            else:
+                query_type = QUERY_GET_STATE
+                period = 1.0 / config.state_hz
+                self._next_state_poll_at = max(self._next_state_poll_at + period, now + period)
+
+            seq = self.sequence_counter & 0xFF
+            self.sequence_counter = (self.sequence_counter + 1) & 0xFF
+
+        frame = QueryCmdFrame(
+            motor_id=config.motor_id,
+            query_type=query_type,
+            arg0=0,
+            seq=seq,
+        )
+        return OutgoingFrame(
+            payload=frame.to_bytes(),
+            summary=frame.to_summary(QUERY_SUMMARY_LABELS),
+            expected_seq=seq,
+            log_traffic=False,
+        )
+
+    def _scheduler_wait_timeout(self) -> float:
+        now = time.monotonic()
+        with self._state_lock:
+            if not self.connected:
+                return SCHEDULER_IDLE_WAIT_SECONDS
+            if self.pending_request is not None:
+                remaining = self.request_timeout - (now - self.pending_request.timestamp)
+                return max(0.0, min(SCHEDULER_IDLE_WAIT_SECONDS, remaining))
+            if now < self.ready_after:
+                return min(SCHEDULER_IDLE_WAIT_SECONDS, self.ready_after - now)
+
+            deadlines = []
+            if self._polling.state_enabled:
+                deadlines.append(self._next_state_poll_at)
+            if self._polling.calib_enabled:
+                deadlines.append(self._next_calib_poll_at)
+
+        if not self._command_queue.empty():
+            return 0.0
+        if not deadlines:
+            return SCHEDULER_IDLE_WAIT_SECONDS
+        return max(0.0, min(SCHEDULER_IDLE_WAIT_SECONDS, min(deadlines) - now))
+
     def _handle_connection_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
-        self.connected = bool(info.get("connected"))
-        if not self.connected:
-            self.pending_request = None
-            self.ready_after = 0.0
-            self.worker = None
+        connected = bool(info.get("connected"))
+        with self._state_lock:
+            self.connected = connected
+            if not connected:
+                self.pending_request = None
+                self.ready_after = 0.0
+            else:
+                now = time.monotonic()
+                self._next_state_poll_at = now
+                self._next_calib_poll_at = now
         self._emit("connection", info)
 
     def _handle_tx_error_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
         expected_seq = info.get("expected_seq")
-        if (
-            expected_seq is not None
-            and self.pending_request is not None
-            and int(expected_seq) == self.pending_request.seq
-        ):
-            self.pending_request = None
-            self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
+        with self._state_lock:
+            if (
+                expected_seq is not None
+                and self.pending_request is not None
+                and int(expected_seq) == self.pending_request.seq
+            ):
+                self.pending_request = None
+                self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
         self._emit("error", str(info.get("message", "串口发送失败")))
 
     def _handle_rx_event(self, payload: object) -> None:
@@ -838,24 +1042,37 @@ class ProtocolService:
 
         matched_summary = None
         latency_ms = None
-        if reply is not None and self.pending_request is not None:
-            reply_seq = getattr(reply, "seq", None)
-            if reply_seq == self.pending_request.seq:
-                matched_summary = self.pending_request.summary
-                latency_ms = (time.monotonic() - self.pending_request.timestamp) * 1000.0
-                self.pending_request = None
-                self.ready_after = time.monotonic() + MIN_HALF_DUPLEX_GAP_SECONDS
+        log_traffic = True
+        with self._state_lock:
+            if reply is not None and self.pending_request is not None:
+                reply_seq = getattr(reply, "seq", None)
+                if reply_seq == self.pending_request.seq:
+                    matched_summary = self.pending_request.summary
+                    latency_ms = (time.monotonic() - self.pending_request.timestamp) * 1000.0
+                    log_traffic = self.pending_request.log_traffic
+                    self.pending_request = None
+                    self.ready_after = time.monotonic()
 
         enriched = dict(info)
         enriched["matched_summary"] = matched_summary
         enriched["latency_ms"] = latency_ms
+        enriched["log_traffic"] = log_traffic
         self._emit("rx", enriched)
 
     def _post_worker_event(self, event_type: str, payload: object) -> None:
         self._worker_events.put((event_type, payload))
+        self._scheduler_wake.set()
 
     def _emit(self, event_type: str, payload: object) -> None:
         self._events.put((event_type, payload))
+
+    @staticmethod
+    def _clear_queue(target: Queue) -> None:
+        while True:
+            try:
+                target.get_nowait()
+            except Empty:
+                return
 
 
 def list_serial_ports() -> List[str]:

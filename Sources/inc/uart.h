@@ -7,11 +7,15 @@
 
 
 //<<AICUBE_USER_DEFINE_BEGIN>>
-uint8_t UART_DMA_Send(const uint8_t *pData, uint8_t len);
 uint8_t xdata *UART_GetRxBuffer(uint8_t *len);
 void UART_ReleaseRxBuffer(void);
+uint8_t xdata *UART_PeekActiveRxBuffer(uint8_t *slot_index, uint8_t *len);
+BOOL UART_PublishActiveRxBuffer(uint8_t slot_index, uint8_t min_len);
 uint8_t UART3_TryLockTx(void);
 uint8_t UART3_WaitLockTx(void);
+uint8_t xdata *UART3_WaitLockTxBuffer(void);
+uint8_t UART3_StartLockedTx(uint8_t len);
+void UART3_UnlockTx(void);
 //<<AICUBE_USER_DEFINE_END>>
 
 

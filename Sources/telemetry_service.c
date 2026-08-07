@@ -6,7 +6,6 @@
 #include "adc.h"
 #include "calibration.h"
 #include "param_registry.h"
-#include <string.h>
 
 uint8_t TelemetryService_BuildHealthStatus(void)
 {
@@ -54,7 +53,6 @@ uint8_t TelemetryService_BuildHealthStatus(void)
 
 void TelemetryService_BuildAckReply(ProtocolReply *reply, uint8_t cmd_type, uint8_t result_code, uint8_t seq)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_ACK;
     reply->seq = seq;
     reply->cmd_type = cmd_type;
@@ -63,7 +61,6 @@ void TelemetryService_BuildAckReply(ProtocolReply *reply, uint8_t cmd_type, uint
 
 void TelemetryService_BuildStateReply(ProtocolReply *reply, uint8_t seq)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_STATE;
     reply->seq = seq;
     reply->control_mode = Motor_GetControlMode();
@@ -77,7 +74,6 @@ void TelemetryService_BuildStateReply(ProtocolReply *reply, uint8_t seq)
 
 void TelemetryService_BuildParamValueReply(ProtocolReply *reply, uint8_t seq, uint8_t param_id, float value)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_PARAM_VALUE;
     reply->seq = seq;
     reply->param_id = param_id;
@@ -86,7 +82,6 @@ void TelemetryService_BuildParamValueReply(ProtocolReply *reply, uint8_t seq, ui
 
 void TelemetryService_BuildParamSnapshotReply(ProtocolReply *reply, uint8_t seq)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_PARAM_SNAPSHOT;
     reply->seq = seq;
     reply->snapshot_version = PROTOCOL_PARAM_SNAPSHOT_VERSION;
@@ -95,7 +90,6 @@ void TelemetryService_BuildParamSnapshotReply(ProtocolReply *reply, uint8_t seq)
 
 void TelemetryService_BuildCalibStatusReply(ProtocolReply *reply, uint8_t seq, uint8_t calib_state, uint8_t progress)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_CALIB_STATUS;
     reply->seq = seq;
     reply->calib_state = calib_state;
@@ -109,7 +103,6 @@ void TelemetryService_BuildCalibSampleReply(ProtocolReply *reply,
                                             float mechanical_angle,
                                             float electrical_error)
 {
-    memset(reply, 0, sizeof(ProtocolReply));
     reply->kind = PROTOCOL_REPLY_CALIB_SAMPLE;
     reply->calib_sample_index = sample_index;
     reply->calib_sample_direction = direction;

@@ -50,10 +50,35 @@ uint8_t Mem_CRC8_Check(uint8_t *dat, int size, uint8_t has_crc)
 
     if (has_crc)
     {
-        return (crc == dat[size - 1]) ? 0 : crc;
+        return (crc == dat[size - 1]) ? 0u : 1u;
     }
     else
     {
         return crc;
     }
+}
+
+uint8_t Mem_CRC8_CheckXData(const uint8_t xdata *dat, uint8_t size, uint8_t has_crc)
+{
+    uint8_t crc;
+    uint8_t index;
+    uint8_t calc_size;
+
+    if (has_crc && (size == 0u))
+    {
+        return 0xFFu;
+    }
+
+    crc = 0x00u;
+    calc_size = has_crc ? (uint8_t)(size - 1u) : size;
+    for (index = 0u; index < calc_size; index++)
+    {
+        crc = CRC8_TAB[crc ^ dat[index]];
+    }
+
+    if (has_crc)
+    {
+        return (crc == dat[size - 1u]) ? 0u : 1u;
+    }
+    return crc;
 }

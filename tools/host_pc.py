@@ -66,6 +66,7 @@ except ImportError as exc:  # pragma: no cover
 MAX_LOG_LINES = 300
 DEFAULT_HISTORY_LENGTH = 500
 PAN_THRESHOLD = 100  # 数据量超过此值后 X 轴开始平移滚动
+PLOT_REFRESH_SECONDS = 1.0 / 30.0
 
 WINDOWS_FONT_CANDIDATES = [
     Path("C:/Windows/Fonts/msyh.ttc"),
@@ -276,12 +277,6 @@ class ChoiceOption:
 
 
 @dataclass
-class QueuedCommand:
-    summary: str
-    callback: Callable[[], None]
-
-
-@dataclass
 class TelemetryState:
     reply_count: int = 0
     state_count: int = 0
@@ -414,14 +409,12 @@ class FOCGuiApp:
         self.font_override = font_override
         self.service = ProtocolService()
         self.log_lines: Deque[str] = deque(maxlen=MAX_LOG_LINES)
-        self.pending_commands: Deque[QueuedCommand] = deque()
         self.plot_dirty = False
         self.plot_paused = False
         self._cached_x: List[float] = []
         self._cached_x_len: int = 0
+        self._next_plot_refresh_at = 0.0
         self.font_status = "未加载中文字体"
-        self.next_state_poll_at = 0.0
-        self.next_calib_poll_at = 0.0
         self.calib_samples: List[CalibSampleReply] = []
         self.calib_samples_saved = False
 
@@ -498,9 +491,11 @@ class FOCGuiApp:
         while dpg.is_dearpygui_running():
             self._process_events()
             self._run_pollers()
-            if self.plot_dirty:
+            now = time.monotonic()
+            if self.plot_dirty and now >= self._next_plot_refresh_at:
                 self._update_plots()
                 self.plot_dirty = False
+                self._next_plot_refresh_at = now + PLOT_REFRESH_SECONDS
             dpg.render_dearpygui_frame()
 
         self.disconnect()
@@ -893,14 +888,10 @@ class FOCGuiApp:
             self._append_log("ERR", "请选择串口后再连接")
             return
 
-        self.pending_commands.clear()
-        self.next_state_poll_at = time.monotonic()
-        self.next_calib_poll_at = time.monotonic()
         dpg.set_value(self.tags["status_text"], f"连接中: {port} @ {baudrate}")
         self.service.connect(port=port, baudrate=baudrate)
 
     def disconnect(self) -> None:
-        self.pending_commands.clear()
         self.service.disconnect()
 
     def clear_logs(self) -> None:
@@ -1057,28 +1048,10 @@ class FOCGuiApp:
         )
 
     def _schedule_user_command(self, summary: str, callback: Callable[[], None]) -> None:
-        if self.pending_commands:
-            self.pending_commands.append(QueuedCommand(summary=summary, callback=callback))
-            self._append_log("SYS", f"手动命令已排队({len(self.pending_commands)}): {summary}")
-            return
-
-        if self.service.is_connected and self.service.is_waiting_reply:
-            self.pending_commands.append(QueuedCommand(summary=summary, callback=callback))
-            self._append_log("SYS", f"总线忙，手动命令已排队: {summary}")
-            return
-
         callback()
 
-    def _dispatch_pending_user_command(self) -> bool:
-        if not self.pending_commands:
-            return False
-
-        queued = self.pending_commands.popleft()
-        self._append_log("SYS", f"优先发送手动命令: {queued.summary}")
-        queued.callback()
-        return True
-
     def _process_events(self) -> None:
+        refresh_live_values = False
         for event_type, payload in self.service.poll_events():
             if event_type == "connection":
                 self._handle_connection_event(payload)
@@ -1086,6 +1059,7 @@ class FOCGuiApp:
                 self._handle_tx_event(payload)
             elif event_type == "rx":
                 self._handle_rx_event(payload)
+                refresh_live_values = True
             elif event_type == "timeout":
                 self._handle_timeout_event(payload)
             elif event_type == "parse_error":
@@ -1094,39 +1068,20 @@ class FOCGuiApp:
                 self._refresh_stats_only()
             elif event_type == "error":
                 self._append_log("ERR", str(payload))
+        if refresh_live_values:
+            self._refresh_live_values()
 
     def _run_pollers(self) -> None:
-        if not self.service.is_connected:
-            return
-
-        if self.service.is_waiting_reply:
-            return
-
-        if self._dispatch_pending_user_command():
-            return
-
-        now = time.monotonic()
         calib_running = (
             self.state.last_calib is not None and self.state.last_calib.calib_state == CALIB_STATE_RUNNING
         )
-
-        if dpg.get_value(self.tags["poll_enabled"]) and (not calib_running):
-            state_hz = max(0.2, float(dpg.get_value(self.tags["poll_hz"])))
-            if now >= self.next_state_poll_at:
-                self.service.query_state(
-                    motor_id=self._selected_motor_id(),
-                    seq=self._next_seq(),
-                )
-                self.next_state_poll_at = now + (1.0 / state_hz)
-
-        if dpg.get_value(self.tags["calib_poll_enabled"]) or calib_running:
-            calib_hz = max(0.2, float(dpg.get_value(self.tags["calib_poll_hz"])))
-            if now >= self.next_calib_poll_at:
-                self.service.query_calibration_status(
-                    motor_id=self._selected_motor_id(),
-                    seq=self._next_seq(),
-                )
-                self.next_calib_poll_at = now + (1.0 / calib_hz)
+        self.service.configure_polling(
+            motor_id=self._selected_motor_id(),
+            state_enabled=bool(dpg.get_value(self.tags["poll_enabled"])) and not calib_running,
+            state_hz=float(dpg.get_value(self.tags["poll_hz"])),
+            calib_enabled=bool(dpg.get_value(self.tags["calib_poll_enabled"])) or calib_running,
+            calib_hz=float(dpg.get_value(self.tags["calib_poll_hz"])),
+        )
 
     def _handle_connection_event(self, payload: object) -> None:
         info = payload if isinstance(payload, dict) else {}
@@ -1134,7 +1089,7 @@ class FOCGuiApp:
         message = str(info.get("message", ""))
 
         if not connected:
-            self.pending_commands.clear()
+            self.service.configure_polling(0, False, DEFAULT_POLL_HZ, False, DEFAULT_CALIB_POLL_HZ)
 
         dpg.set_value(self.tags["status_text"], message or ("已连接" if connected else "未连接"))
         self._append_log("SYS", message or ("已连接" if connected else "已断开"))
@@ -1228,7 +1183,7 @@ class FOCGuiApp:
             self.state.histories["output"].append(reply.output)
             self.state.histories["position"].append(reply.position)
             self.state.histories["voltage"].append(reply.voltage)
-            self.state.history_timestamps.append(time.time())
+            self.state.history_timestamps.append(time.monotonic())
             self.plot_dirty = True
         elif isinstance(reply, ParamValueReply):
             self.state.last_param_value = reply
@@ -1241,8 +1196,8 @@ class FOCGuiApp:
         elif isinstance(reply, CalibSampleReply):
             self.calib_samples.append(reply)
 
-        self._append_log("RX", f"{summary} | {format_hex(raw)}")
-        self._refresh_live_values()
+        if bool(payload.get("log_traffic", True)):
+            self._append_log("RX", f"{summary} | {format_hex(raw)}")
 
     def _save_calibration_samples(self) -> None:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
