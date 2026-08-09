@@ -55,8 +55,8 @@ typedef struct {
 void PI_Init(PI_Controller_t *pi, float kp, float ki, float beta, float out_max, float out_min);
 // 重置PI控制器（清除积分）
 void PI_Reset(PI_Controller_t *pi);
-// 更新PI控制器，比例项和积分项可使用不同的反馈速度
-float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback,
+// 更新PI控制器，比例项和积分项使用相同的反馈速度
+float PI_Update(PI_Controller_t *pi, float ref, float feedback,
                 float out_max, float out_min);
 
 
@@ -150,7 +150,7 @@ typedef struct {
     float raw_target_speed;     /* 原始目标速度（整形前） */
     float fast_speed;           /* PLL降采样后的快速速度 */
     float trend_speed;          /* 低通后的趋势速度 */
-    float filtered_speed;       /* 最终进入比例速度环的等效反馈速度 */
+    float filtered_speed;       /* 最终进入速度PI的等效反馈速度 */
     float last_angle;           /* 上次角度（用于差分） */
     uint8 angle_initialized;    /* 角度初始化标志 */
     float observer_speed_sum;   /* 高频观测速度的降采样前累加值 */

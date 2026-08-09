@@ -49,8 +49,8 @@ static const ParamRegistryEntry s_param_table[] =
     { PROTOCOL_PARAM_ID_MOTOR_PHASE_R,        PARAM_OFFSET(motor_phase_resistance),                       PARAM_VALUE_FLOAT, 0.0f,      100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_NONE },
     { PROTOCOL_PARAM_ID_MOTOR_PHASE_L,        PARAM_OFFSET(motor_phase_inductance),                       PARAM_VALUE_FLOAT, 0.0f,      10.0f,    PARAM_RULE_NONE,          PARAM_APPLY_NONE },
 
-    { PROTOCOL_PARAM_ID_SPEED_OUT_MAX,        PARAM_OFFSET(speed_ctrl_params.out_max),                    PARAM_VALUE_FLOAT, 0.0f,      1.0f,     PARAM_RULE_SPEED_OUT_MAX, PARAM_APPLY_SPEED_CTRL },
-    { PROTOCOL_PARAM_ID_SPEED_OUT_MIN,        PARAM_OFFSET(speed_ctrl_params.out_min),                    PARAM_VALUE_FLOAT, -1.0f,     0.0f,     PARAM_RULE_SPEED_OUT_MIN, PARAM_APPLY_SPEED_CTRL },
+    { PROTOCOL_PARAM_ID_SPEED_OUT_MAX,        PARAM_OFFSET(speed_ctrl_params.out_max),                    PARAM_VALUE_FLOAT, 0.0f,      5.0f,     PARAM_RULE_SPEED_OUT_MAX, PARAM_APPLY_SPEED_CTRL },
+    { PROTOCOL_PARAM_ID_SPEED_OUT_MIN,        PARAM_OFFSET(speed_ctrl_params.out_min),                    PARAM_VALUE_FLOAT, -5.0f,     0.0f,     PARAM_RULE_SPEED_OUT_MIN, PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_SPEED_LPF_MS,         PARAM_OFFSET(speed_ctrl_params.lpf_time_constant_ms),       PARAM_VALUE_FLOAT, 0.0f,      1000.0f,  PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_FF_ACCEL_GAIN,        PARAM_OFFSET(speed_ctrl_params.ff.acceleration_gain),       PARAM_VALUE_FLOAT, -100.0f,   100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },
     { PROTOCOL_PARAM_ID_FF_FRICTION,          PARAM_OFFSET(speed_ctrl_params.ff.friction_compensation),   PARAM_VALUE_FLOAT, -100.0f,   100.0f,   PARAM_RULE_NONE,          PARAM_APPLY_SPEED_CTRL },

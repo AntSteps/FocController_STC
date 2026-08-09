@@ -76,12 +76,12 @@ void PI_Reset(PI_Controller_t *pi)
     pi->output = 0.0f;
 }
 
-float PI_Update(PI_Controller_t *pi, float ref, float p_feedback, float i_feedback,
+float PI_Update(PI_Controller_t *pi, float ref, float feedback,
                 float out_max, float out_min)
 {
     float p_term, i_term, output;
-    float error_i = ref - i_feedback;             /* 积分项只跟随趋势速度 */
-    float error_p = pi->beta * ref - p_feedback;  /* 比例项使用非线性等效反馈 */
+    float error_i = ref - feedback;
+    float error_p = pi->beta * ref - feedback;
 
     /* 比例项 */
     p_term = pi->kp * error_p;
@@ -350,7 +350,8 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
     ff_current = g_speed_ctrl.accel_ff
                + g_speed_ctrl.load_ff
                + g_speed_ctrl.friction_ff;
-    bemf_voltage = g_speed_ctrl.params->ff.Ke * g_speed_ctrl.target_speed;
+    /* 反电势由转子实际速度决定，使用目标速度会在堵转时额外施加电压。 */
+    bemf_voltage = g_speed_ctrl.params->ff.Ke * g_speed_ctrl.fast_speed;
 
     /* 母线无效时冻结PI积分，避免恢复供电时产生积分冲击。 */
     if (bus_voltage <= 0.0f) {
@@ -386,11 +387,10 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
         }
     }
 
-    /* 比例项使用等效反馈，积分项只跟随慢速趋势。 */
+    /* 比例项和积分项使用相同的非线性等效反馈。 */
     g_speed_ctrl.pi_output = PI_Update(&g_speed_ctrl.pi,
                                        g_speed_ctrl.target_speed,
                                        g_speed_ctrl.filtered_speed,
-                                       g_speed_ctrl.trend_speed,
                                        pi_max,
                                        pi_min);
 
@@ -398,7 +398,7 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
     g_speed_ctrl.i_output = g_speed_ctrl.pi_output
                           + ff_current;
 
-    /* 电压输出 = i_output * R + Ke * ω_ref */
+    /* 电压输出 = i_output * R + Ke * ω_measured */
     g_speed_ctrl.total_output = g_speed_ctrl.i_output * g_speed_ctrl.params->ff.R
                               + bemf_voltage;
 
