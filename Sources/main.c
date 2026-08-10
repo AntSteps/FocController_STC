@@ -46,9 +46,11 @@ void main(void)
         if (ProtocolController_PumpRx(&request))
         {
             MOTOR_STATUS=!MOTOR_STATUS;
-            ProcessCommand(&request);
+            if (ProcessCommand(&request))
+            {
+                last_cmd_ms = Timer_GetTickMs();
+            }
             MOTOR_STATUS=!MOTOR_STATUS;
-            last_cmd_ms = Timer_GetTickMs();
         }
 
         /* 通信看门狗：超时未收到指令则自动停机 */

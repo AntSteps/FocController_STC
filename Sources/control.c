@@ -9,6 +9,18 @@
  *=========================================*/
 SpeedController_t g_speed_ctrl;
 
+static float SpeedController_GetConfiguredRuntimeLimitCeiling(void)
+{
+    float positive_limit;
+    float negative_limit;
+
+    positive_limit = g_speed_ctrl.pi.out_max;
+    negative_limit = -g_speed_ctrl.pi.out_min;
+    if (positive_limit < 0.0f) positive_limit = 0.0f;
+    if (negative_limit < 0.0f) negative_limit = 0.0f;
+    return (positive_limit > negative_limit) ? positive_limit : negative_limit;
+}
+
 static float NormalizeAnglePi(float angle)
 {
     while (angle > PI) {
@@ -207,6 +219,9 @@ void SpeedController_Init(SpeedController_Params_t *params)
     g_speed_ctrl.friction_ff = 0.0f;
     g_speed_ctrl.i_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+    g_speed_ctrl.runtime_output_limit = SpeedController_GetConfiguredRuntimeLimitCeiling();
+    g_speed_ctrl.estimated_current = 0.0f;
+    g_speed_ctrl.output_saturated = 0u;
     g_speed_ctrl.prev_target_speed = 0.0f;
     if (params->ff.R > 0.0f) {
         g_speed_ctrl.inv_R = 1.0f / params->ff.R;
@@ -239,6 +254,38 @@ float SpeedController_GetFilteredSpeed(void)
 float SpeedController_GetOutput(void)
 {
     return g_speed_ctrl.total_output;
+}
+
+float SpeedController_GetEstimatedCurrent(void)
+{
+    return g_speed_ctrl.estimated_current;
+}
+
+BOOL SpeedController_IsOutputSaturated(void)
+{
+    return (BOOL)(g_speed_ctrl.output_saturated != 0u);
+}
+
+BOOL SpeedController_SetRuntimeOutputLimit(float limit)
+{
+    float configured_limit;
+    BOOL clamped;
+
+    configured_limit = SpeedController_GetConfiguredRuntimeLimitCeiling();
+    clamped = FALSE;
+    if (limit < 0.0f)
+    {
+        limit = 0.0f;
+        clamped = TRUE;
+    }
+    else if (limit > configured_limit)
+    {
+        limit = configured_limit;
+        clamped = TRUE;
+    }
+
+    g_speed_ctrl.runtime_output_limit = limit;
+    return clamped;
 }
 
 float SpeedController_UpdateObserver(float mechanical_angle)
@@ -358,12 +405,20 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
         g_speed_ctrl.pi_output = 0.0f;
         g_speed_ctrl.i_output = 0.0f;
         g_speed_ctrl.total_output = 0.0f;
+        g_speed_ctrl.estimated_current = 0.0f;
+        g_speed_ctrl.output_saturated = 0u;
         return 0.0f;
     }
 
     /* out_min/out_max约束PI与全部前馈之和，而不是只约束PI。 */
-    current_pi_max = g_speed_ctrl.pi.out_max - ff_current;
-    current_pi_min = g_speed_ctrl.pi.out_min - ff_current;
+    current_pi_max = g_speed_ctrl.runtime_output_limit - ff_current;
+    current_pi_min = -g_speed_ctrl.runtime_output_limit - ff_current;
+    if (current_pi_max > (g_speed_ctrl.pi.out_max - ff_current)) {
+        current_pi_max = g_speed_ctrl.pi.out_max - ff_current;
+    }
+    if (current_pi_min < (g_speed_ctrl.pi.out_min - ff_current)) {
+        current_pi_min = g_speed_ctrl.pi.out_min - ff_current;
+    }
     pi_max = current_pi_max;
     pi_min = current_pi_min;
 
@@ -393,6 +448,8 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
                                        g_speed_ctrl.filtered_speed,
                                        pi_max,
                                        pi_min);
+    g_speed_ctrl.output_saturated = (uint8)((g_speed_ctrl.pi_output >= pi_max) ||
+                                             (g_speed_ctrl.pi_output <= pi_min));
 
     /* 总模型电流 = PI + 加速度前馈 + 负载前馈 + 摩擦前馈。 */
     g_speed_ctrl.i_output = g_speed_ctrl.pi_output
@@ -405,8 +462,17 @@ float SpeedController_UpdateFromSpeed(float measured_speed, float bus_voltage)
     /* 反算边界无法满足时仍做最终安全限幅。 */
     if (g_speed_ctrl.total_output > voltage_limit) {
         g_speed_ctrl.total_output = voltage_limit;
+        g_speed_ctrl.output_saturated = 1u;
     } else if (g_speed_ctrl.total_output < -voltage_limit) {
         g_speed_ctrl.total_output = -voltage_limit;
+        g_speed_ctrl.output_saturated = 1u;
+    }
+
+    if (g_speed_ctrl.inv_R > 0.0f) {
+        g_speed_ctrl.estimated_current = (g_speed_ctrl.total_output - bemf_voltage)
+                                       * g_speed_ctrl.inv_R;
+    } else {
+        g_speed_ctrl.estimated_current = 0.0f;
     }
 
     return g_speed_ctrl.total_output;
@@ -429,6 +495,8 @@ void SpeedController_Reset(void)
     g_speed_ctrl.friction_ff = 0.0f;
     g_speed_ctrl.i_output = 0.0f;
     g_speed_ctrl.total_output = 0.0f;
+    g_speed_ctrl.estimated_current = 0.0f;
+    g_speed_ctrl.output_saturated = 0u;
     g_speed_ctrl.prev_target_speed = 0.0f;
     g_speed_ctrl.cmd_lpf.output = g_speed_ctrl.target_speed;
     g_speed_ctrl.cmd_lpf.init_done = 1;

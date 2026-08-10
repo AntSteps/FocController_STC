@@ -8,6 +8,8 @@
 #endif
 
 #define PROTOCOL_MAX_FRAME_SIZE                 128u
+#define PROTOCOL_FAST_CTRL_FRAME_SIZE           7u
+#define PROTOCOL_FAST_STATUS_FRAME_SIZE         13u
 #define PROTOCOL_PARAM_SNAPSHOT_VERSION         0x02u
 #define PROTOCOL_HEAD_ACK_REPLY                 0x0621u
 #define PROTOCOL_HEAD_STATE_REPLY               0x0721u
@@ -15,11 +17,34 @@
 #define PROTOCOL_HEAD_PARAM_SNAPSHOT_REPLY      0x0921u
 #define PROTOCOL_HEAD_CALIB_STATUS_REPLY        0x0A21u
 #define PROTOCOL_HEAD_CALIB_SAMPLE_REPLY        0x0B21u
+#define PROTOCOL_HEAD_FAST_STATUS_REPLY         0x0C21u
 
 #define PROTOCOL_HEAD_CTRL_CMD                  0x1145u
 #define PROTOCOL_HEAD_PARAM_WRITE_CMD           0x1245u
 #define PROTOCOL_HEAD_QUERY_CMD                 0x1345u
 #define PROTOCOL_HEAD_CALIB_CMD                 0x1445u
+#define PROTOCOL_HEAD_FAST_CTRL_CMD             0x1545u
+
+#define PROTOCOL_FAST_CTRL_COMMAND_MASK         0x03u
+#define PROTOCOL_FAST_CTRL_RESERVED_MASK        0x7Cu
+#define PROTOCOL_FAST_CTRL_REQUEST_STATUS       0x80u
+
+#define PROTOCOL_FAST_CMD_STOP                  0x00u
+#define PROTOCOL_FAST_CMD_SET_SPEED             0x01u
+#define PROTOCOL_FAST_CMD_START_CALIBRATION     0x02u
+#define PROTOCOL_FAST_CMD_SET_OUTPUT_LIMIT      0x03u
+
+#define PROTOCOL_FAST_SPEED_SCALE               64.0f
+#define PROTOCOL_FAST_SPEED_RAW_MAX             32000
+#define PROTOCOL_FAST_SPEED_RAW_MIN             (-32000)
+
+#define PROTOCOL_FAST_STATUS_MOTOR_ENABLED      0x01u
+#define PROTOCOL_FAST_STATUS_COMMAND_CLAMPED    0x02u
+#define PROTOCOL_FAST_STATUS_OUTPUT_SATURATED   0x04u
+#define PROTOCOL_FAST_STATUS_ENCODER_FAULT      0x08u
+#define PROTOCOL_FAST_STATUS_DRIVER_FAULT       0x10u
+#define PROTOCOL_FAST_STATUS_BUS_UNDERVOLTAGE   0x20u
+#define PROTOCOL_FAST_STATUS_MOTOR_FAULT        0x40u
 
 #define PROTOCOL_STATUS_ENCODER_FAULT           0x01u
 #define PROTOCOL_STATUS_MOTOR_FAULT             0x02u
@@ -69,7 +94,8 @@ typedef enum
     PROTOCOL_REQUEST_CTRL = 1,
     PROTOCOL_REQUEST_PARAM_WRITE = 2,
     PROTOCOL_REQUEST_QUERY = 3,
-    PROTOCOL_REQUEST_CALIB = 4
+    PROTOCOL_REQUEST_CALIB = 4,
+    PROTOCOL_REQUEST_FAST_CTRL = 5
 } ProtocolRequestKind;
 
 typedef enum
@@ -80,7 +106,8 @@ typedef enum
     PROTOCOL_REPLY_PARAM_VALUE = 3,
     PROTOCOL_REPLY_PARAM_SNAPSHOT = 4,
     PROTOCOL_REPLY_CALIB_STATUS = 5,
-    PROTOCOL_REPLY_CALIB_SAMPLE = 6
+    PROTOCOL_REPLY_CALIB_SAMPLE = 6,
+    PROTOCOL_REPLY_FAST_STATUS = 7
 } ProtocolReplyKind;
 
 typedef enum
@@ -159,6 +186,15 @@ typedef struct
     uint8_t seq;
     uint8_t crc8;
 } CalibCmdFrame;
+
+typedef struct
+{
+    uint16_t head;
+    uint8_t id;
+    uint8_t control;
+    uint16_t value;
+    uint8_t crc8;
+} FastCtrlFrame;
 
 typedef struct
 {
@@ -260,7 +296,24 @@ typedef struct
     uint8_t seq;
     uint8_t crc8;
 } CalibSampleReplyFrame;
+
+typedef struct
+{
+    uint16_t head;
+    uint8_t id;
+    uint8_t status;
+    int16_t velocity;
+    int16_t iq_estimate;
+    uint16_t position;
+    uint16_t bus_voltage;
+    uint8_t crc8;
+} FastStatusReplyFrame;
 #pragma pack()
+
+typedef char ProtocolFastCtrlFrameSizeCheck[
+    (sizeof(FastCtrlFrame) == PROTOCOL_FAST_CTRL_FRAME_SIZE) ? 1 : -1];
+typedef char ProtocolFastStatusFrameSizeCheck[
+    (sizeof(FastStatusReplyFrame) == PROTOCOL_FAST_STATUS_FRAME_SIZE) ? 1 : -1];
 
 typedef struct
 {
@@ -275,6 +328,8 @@ typedef struct
     uint8_t query_type;
     uint8_t arg0;
     uint8_t calib_cmd;
+    uint8_t fast_control;
+    uint16_t fast_value;
 } ProtocolRequest;
 
 typedef struct
@@ -301,6 +356,11 @@ typedef struct
     float calib_sample_theta;
     float calib_sample_mechanical_angle;
     float calib_sample_error;
+    uint8_t fast_status;
+    int16_t fast_velocity;
+    int16_t fast_iq_estimate;
+    uint16_t fast_position;
+    uint16_t fast_bus_voltage;
 } ProtocolReply;
 
 BOOL ProtocolFrame_FindRequestLength(uint8_t head_byte0, uint8_t head_byte1, uint8_t *frame_len);

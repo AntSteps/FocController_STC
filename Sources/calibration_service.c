@@ -51,6 +51,7 @@ typedef struct
     float sum_cos_2;
     int sample_count;
     int8_t sweep_direction;
+    uint8_t stream_samples;
 } CalibrationServiceContext;
 
 static CalibrationServiceContext s_calib_ctx;
@@ -127,7 +128,7 @@ void CalibrationService_Init(void)
     s_calib_ctx.calib_state = PROTOCOL_CALIB_STATE_IDLE;
 }
 
-ProtocolResultCode CalibrationService_Start(void)
+ProtocolResultCode CalibrationService_Start(BOOL stream_samples)
 {
     ParamStorage_Data_t *params;
 
@@ -150,6 +151,7 @@ ProtocolResultCode CalibrationService_Start(void)
     s_calib_ctx.pole_pairs = params->motor_pole_pairs;
     s_calib_ctx.result.pole_pairs = params->motor_pole_pairs;
     s_calib_ctx.result.dir = 1;
+    s_calib_ctx.stream_samples = stream_samples ? 1u : 0u;
 
     Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
     Motor_SetSuspended(TRUE);
@@ -307,6 +309,7 @@ void CalibrationService_Poll(void)
             s_calib_ctx.sum_cos_2 += diff * (float)cos((double)(2.0f * mech_rad));
             s_calib_ctx.sample_count++;
 
+            if (s_calib_ctx.stream_samples != 0u)
             {
                 ProtocolReply sample_reply;
                 TelemetryService_BuildCalibSampleReply(&sample_reply,
@@ -367,6 +370,7 @@ void CalibrationService_Poll(void)
             s_calib_ctx.sum_cos_2 += diff * (float)cos((double)(2.0f * mech_rad));
             s_calib_ctx.sample_count++;
 
+            if (s_calib_ctx.stream_samples != 0u)
             {
                 ProtocolReply sample_reply;
                 TelemetryService_BuildCalibSampleReply(&sample_reply,

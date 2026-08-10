@@ -14,7 +14,8 @@ static const ProtocolRequestDescriptor s_request_descriptors[] =
     { PROTOCOL_HEAD_CTRL_CMD, sizeof(CtrlCmdFrame), PROTOCOL_REQUEST_CTRL },
     { PROTOCOL_HEAD_PARAM_WRITE_CMD, sizeof(ParamWriteCmdFrame), PROTOCOL_REQUEST_PARAM_WRITE },
     { PROTOCOL_HEAD_QUERY_CMD, sizeof(QueryCmdFrame), PROTOCOL_REQUEST_QUERY },
-    { PROTOCOL_HEAD_CALIB_CMD, sizeof(CalibCmdFrame), PROTOCOL_REQUEST_CALIB }
+    { PROTOCOL_HEAD_CALIB_CMD, sizeof(CalibCmdFrame), PROTOCOL_REQUEST_CALIB },
+    { PROTOCOL_HEAD_FAST_CTRL_CMD, sizeof(FastCtrlFrame), PROTOCOL_REQUEST_FAST_CTRL }
 };
 
 static void ProtocolFrame_WriteU16BE(uint8_t xdata *buf, uint16_t value)
@@ -87,6 +88,11 @@ BOOL ProtocolFrame_CheckCrc(const uint8_t *frame, uint8_t frame_len)
     return (BOOL)(Mem_CRC8_Check((uint8_t *)frame, frame_len, 1) == 0);
 }
 
+static void ProtocolFrame_WriteI16BE(uint8_t xdata *buf, int16_t value)
+{
+    ProtocolFrame_WriteU16BE(buf, (uint16_t)value);
+}
+
 BOOL ProtocolFrame_CheckCrcXData(const uint8_t xdata *frame, uint8_t frame_len)
 {
     return (BOOL)(Mem_CRC8_CheckXData(frame, frame_len, 1u) == 0u);
@@ -122,7 +128,9 @@ BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, Protoc
 
     request->kind = descriptor->kind;
     request->motor_id = frame[2];
-    request->seq = frame[frame_len - 2];
+    request->seq = (descriptor->kind == PROTOCOL_REQUEST_FAST_CTRL)
+                 ? 0u
+                 : frame[frame_len - 2u];
 
     switch (descriptor->kind)
     {
@@ -145,6 +153,15 @@ BOOL ProtocolFrame_DecodeRequest(const uint8_t *frame, uint8_t frame_len, Protoc
     case PROTOCOL_REQUEST_CALIB:
         request->calib_cmd = frame[3];
         request->arg0 = frame[4];
+        break;
+
+    case PROTOCOL_REQUEST_FAST_CTRL:
+        request->fast_control = frame[3];
+        request->fast_value = ProtocolFrame_ReadU16BE(&frame[4]);
+        if ((request->fast_control & PROTOCOL_FAST_CTRL_RESERVED_MASK) != 0u)
+        {
+            return FALSE;
+        }
         break;
 
     default:
@@ -234,6 +251,18 @@ BOOL ProtocolFrame_EncodeReply(const ProtocolReply *reply, uint8_t xdata *frame,
         ProtocolFrame_WriteFloatRaw(&frame[14], reply->calib_sample_error);
         frame[18] = 0u;
         frame[19] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
+        break;
+
+    case PROTOCOL_REPLY_FAST_STATUS:
+        len = sizeof(FastStatusReplyFrame);
+        ProtocolFrame_WriteU16BE(&frame[0], PROTOCOL_HEAD_FAST_STATUS_REPLY);
+        frame[2] = DEVICE_ID;
+        frame[3] = reply->fast_status;
+        ProtocolFrame_WriteI16BE(&frame[4], reply->fast_velocity);
+        ProtocolFrame_WriteI16BE(&frame[6], reply->fast_iq_estimate);
+        ProtocolFrame_WriteU16BE(&frame[8], reply->fast_position);
+        ProtocolFrame_WriteU16BE(&frame[10], reply->fast_bus_voltage);
+        frame[12] = ProtocolFrame_CalcCrcXData(frame, (uint8_t)(len - 1));
         break;
 
     default:

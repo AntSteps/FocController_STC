@@ -177,7 +177,6 @@ void ProtocolController_Init(void)
 
 BOOL ProtocolController_PumpRx(ProtocolRequest *request)
 {
-    ProtocolRequest latest_request;
     uint8_t rx_len;
     uint8_t xdata *rx_buffer;
     BOOL found_request;
@@ -217,12 +216,14 @@ BOOL ProtocolController_PumpRx(ProtocolRequest *request)
         }
 
         UART_ReleaseRxBuffer();
+        if (found_request)
+        {
+            break;
+        }
     }
 
-    while (ProtocolController_ExtractRequest(&latest_request))
+    if (!found_request && ProtocolController_ExtractRequest(request))
     {
-        /* 主循环本轮仅消费一条请求，这里保留最新一条。 */
-        *request = latest_request;
         found_request = TRUE;
     }
 

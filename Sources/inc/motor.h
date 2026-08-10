@@ -3,6 +3,8 @@
 
 #include "def.h"
 
+#define MOTOR_MIN_BUS_VOLTAGE  1.0f
+
 typedef enum
 {
     MOTOR_CONTROL_MODE_STOP = 0,

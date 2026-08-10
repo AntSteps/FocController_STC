@@ -164,6 +164,9 @@ typedef struct {
     float i_output;             /* 总电流参考 = pi + accel_ff + load_ff + friction_ff */
     float total_output;         /* 电压输出 = i_output * R + Ke * ω */
     float inv_R;                /* 相电阻倒数，参数刷新时预计算 */
+    float runtime_output_limit; /* Fast协议设置的运行时对称电流限制 */
+    float estimated_current;    /* 根据最终施加电压反推的模型电流 */
+    uint8 output_saturated;     /* 电流或电压输出达到限制 */
 
     /* 加速度计算用 */
     float prev_target_speed;    /* 上次目标速度（用于差分） */
@@ -186,6 +189,9 @@ float SpeedController_GetTarget(void);
 float SpeedController_GetFilteredSpeed(void);
 // 获取控制器总输出
 float SpeedController_GetOutput(void);
+float SpeedController_GetEstimatedCurrent(void);
+BOOL SpeedController_IsOutputSaturated(void);
+BOOL SpeedController_SetRuntimeOutputLimit(float limit);
 // 高频更新速度观测器（传入校正机械角，单位rad），返回瞬时估计速度
 float SpeedController_UpdateObserver(float mechanical_angle);
 // 累计满一个速度环周期时返回平均速度

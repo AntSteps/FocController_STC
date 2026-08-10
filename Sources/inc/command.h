@@ -3,6 +3,6 @@
 
 #include "protocol_frame.h"
 
-void ProcessCommand(const ProtocolRequest *request);
+BOOL ProcessCommand(const ProtocolRequest *request);
 
 #endif

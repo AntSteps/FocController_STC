@@ -4,7 +4,7 @@
 #include "protocol_frame.h"
 
 void CalibrationService_Init(void);
-ProtocolResultCode CalibrationService_Start(void);
+ProtocolResultCode CalibrationService_Start(BOOL stream_samples);
 void CalibrationService_Poll(void);
 BOOL CalibrationService_IsBusy(void);
 uint8_t CalibrationService_GetState(void);

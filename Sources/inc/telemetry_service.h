@@ -15,5 +15,6 @@ void TelemetryService_BuildCalibSampleReply(ProtocolReply *reply,
                                             float command_theta,
                                             float mechanical_angle,
                                             float electrical_error);
+void TelemetryService_BuildFastStatusReply(ProtocolReply *reply, BOOL command_clamped);
 
 #endif

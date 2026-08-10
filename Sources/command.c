@@ -150,14 +150,105 @@ static void Command_HandleQuery(const ProtocolRequest *request)
         break;
     }
 }
-void ProcessCommand(const ProtocolRequest *request)
+
+static BOOL Command_HandleFastControl(const ProtocolRequest *request)
+{
+    ParamStorage_Data_t *params;
+    uint8_t command;
+    BOOL request_status;
+    BOOL command_clamped;
+    BOOL refresh_watchdog;
+    int16_t speed_raw;
+    float target_speed;
+
+    command = request->fast_control & PROTOCOL_FAST_CTRL_COMMAND_MASK;
+    request_status = (BOOL)((request->fast_control & PROTOCOL_FAST_CTRL_REQUEST_STATUS) != 0u);
+    command_clamped = FALSE;
+    refresh_watchdog = FALSE;
+
+    if (command == PROTOCOL_FAST_CMD_START_CALIBRATION)
+    {
+        if (request->fast_value == 0u)
+        {
+            (void)CalibrationService_Start(FALSE);
+        }
+        return FALSE;
+    }
+
+    if (CalibrationService_IsBusy())
+    {
+        return FALSE;
+    }
+
+    switch (command)
+    {
+    case PROTOCOL_FAST_CMD_STOP:
+        if (request->fast_value != 0u)
+        {
+            return FALSE;
+        }
+        SpeedController_SetTarget(0.0f);
+        SpeedController_SetLoadFF(0.0f);
+        Motor_SetControlMode(MOTOR_CONTROL_MODE_STOP);
+        break;
+
+    case PROTOCOL_FAST_CMD_SET_SPEED:
+        speed_raw = (int16_t)request->fast_value;
+        if ((speed_raw < PROTOCOL_FAST_SPEED_RAW_MIN) ||
+            (speed_raw > PROTOCOL_FAST_SPEED_RAW_MAX))
+        {
+            return FALSE;
+        }
+
+        params = ParamStorage_Get();
+        target_speed = (float)speed_raw * (1.0f / PROTOCOL_FAST_SPEED_SCALE);
+        if (target_speed > params->velocity_limit)
+        {
+            target_speed = params->velocity_limit;
+            command_clamped = TRUE;
+        }
+        else if (target_speed < -params->velocity_limit)
+        {
+            target_speed = -params->velocity_limit;
+            command_clamped = TRUE;
+        }
+
+        SpeedController_SetTarget(target_speed);
+        SpeedController_SetLoadFF(0.0f);
+        Motor_SetControlMode(MOTOR_CONTROL_MODE_SPEED);
+        refresh_watchdog = TRUE;
+        break;
+
+    case PROTOCOL_FAST_CMD_SET_OUTPUT_LIMIT:
+        command_clamped = SpeedController_SetRuntimeOutputLimit(
+            (float)request->fast_value * 0.001f);
+        break;
+
+    default:
+        return FALSE;
+    }
+
+    if (request_status)
+    {
+        TelemetryService_BuildFastStatusReply(&s_command_reply, command_clamped);
+        Command_SendReply(&s_command_reply);
+    }
+
+    return refresh_watchdog;
+}
+
+BOOL ProcessCommand(const ProtocolRequest *request)
 {
     ProtocolResultCode result;
+    BOOL refresh_watchdog;
 
     if (request == (const ProtocolRequest *)0)
     {
-        return;
+        return FALSE;
     }
+
+    /* 完整协议保持原有在线语义；Fast协议只由SET_SPEED刷新。 */
+    refresh_watchdog = (BOOL)(request->kind != PROTOCOL_REQUEST_FAST_CTRL);
 
     switch (request->kind)
     {
@@ -194,6 +285,10 @@ void ProcessCommand(const ProtocolRequest *request)
         Command_SendReply(&s_command_reply);
         break;
 
+    case PROTOCOL_REQUEST_FAST_CTRL:
+        refresh_watchdog = Command_HandleFastControl(request);
+        break;
+
     case PROTOCOL_REQUEST_QUERY:
         Command_HandleQuery(request);
         break;
@@ -205,7 +300,7 @@ void ProcessCommand(const ProtocolRequest *request)
         }
         else
         {
-            result = CalibrationService_Start();
+            result = CalibrationService_Start(TRUE);
         }
         TelemetryService_BuildAckReply(&s_command_reply,
                                        PROTOCOL_REQUEST_CALIB,
@@ -222,4 +317,6 @@ void ProcessCommand(const ProtocolRequest *request)
         Command_SendReply(&s_command_reply);
         break;
     }
+
+    return refresh_watchdog;
 }

@@ -12,7 +12,6 @@
 // 开环测试时固定输出的Q轴电压幅值
 #define MOTOR_OPEN_LOOP_TEST_Q_VOLTAGE     0.8f
 #define MOTOR_OPEN_LOOP_TEST_TWO_PI        6.28318530718f
-#define MOTOR_MIN_BUS_VOLTAGE              1.0f
 
 // 控制相关
 static float s_cached_angle = 0.0f;   // 缓存的角度（用于速度计算）
